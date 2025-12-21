@@ -11,11 +11,6 @@ use vulkano::pipeline::{ComputePipeline, Pipeline, PipelineBindPoint, PipelineLa
 
 use vulkano::sync::{self, GpuFuture};
 
-use vulkano_util::{
-    context::{VulkanoConfig, VulkanoContext},
-    window::{VulkanoWindows, WindowDescriptor},
-};
-
 use std::sync::Arc;
 
 use crate::app::VulkanManager;

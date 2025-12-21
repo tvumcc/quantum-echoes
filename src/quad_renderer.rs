@@ -16,7 +16,6 @@ use vulkano::render_pass::*;
 use vulkano::shader::*;
 
 use egui_winit_vulkano::Gui;
-use winit::window::WindowId;
 
 use std::sync::Arc;
 
@@ -35,22 +34,22 @@ struct VertexContainer {
 pub struct QuadRenderer {
     vertex_shader: Arc<ShaderModule>,
     fragment_shader: Arc<ShaderModule>,
-    pub swapchain: Arc<Swapchain>,
+    swapchain: Arc<Swapchain>,
     images: Vec<Arc<Image>>,
 
-    pub viewport: viewport::Viewport,
-    pub render_pass: Arc<RenderPass>,
-    pub framebuffers: Vec<Arc<Framebuffer>>,
+    viewport: viewport::Viewport,
+    render_pass: Arc<RenderPass>,
+    framebuffers: Vec<Arc<Framebuffer>>,
     pipeline: Arc<GraphicsPipeline>,
-    pub command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
+    command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 
     descriptor_set: Arc<DescriptorSet>,
 
     vertex_buffer: Subbuffer<[VertexContainer]>,
 
     pub window_resized: bool,
-    pub recreate_swapchain: bool,
-    pub previous_frame_end: Option<Box<dyn GpuFuture>>
+    recreate_swapchain: bool,
+    previous_frame_end: Option<Box<dyn GpuFuture>>
 }
 
 impl QuadRenderer {
@@ -69,7 +68,6 @@ impl QuadRenderer {
             }
         }
 
-        // Vertex Buffer Creation
         let vertex_buffer = Buffer::from_iter(
             mgr.memory_allocator.clone(),
             BufferCreateInfo {

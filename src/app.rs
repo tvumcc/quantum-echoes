@@ -1,11 +1,3 @@
-use vulkano::image::view::ImageView;
-use vulkano::render_pass::Framebuffer;
-use vulkano::render_pass::FramebufferCreateInfo;
-use vulkano::*;
-use vulkano::swapchain::*;
-use vulkano::instance::*;
-use vulkano::device::*;
-use vulkano::device::physical::*;
 use vulkano::memory::allocator::*;
 use vulkano::command_buffer::allocator::*;
 use vulkano::descriptor_set::allocator::*;
@@ -18,9 +10,6 @@ use winit::event_loop::{EventLoop, ActiveEventLoop};
 use egui_winit_vulkano::egui;
 use egui_winit_vulkano::Gui;
 use egui_winit_vulkano::GuiConfig;
-use egui::{ScrollArea, TextEdit, TextStyle};
-
-use vulkano::sync::{self, GpuFuture};
 
 use vulkano_util::{
     context::{VulkanoConfig, VulkanoContext},
@@ -31,7 +20,6 @@ use std::sync::Arc;
 
 use crate::quad_renderer::QuadRenderer;
 use crate::simulator::Simulator;
-
 
 pub struct VulkanManager {
     pub context: VulkanoContext,
@@ -72,10 +60,10 @@ pub struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.mgr.windows.create_window(event_loop, &self.mgr.context, &WindowDescriptor::default(), |create_info| {
-            // create_info.image_format = format::Format::R8G8B8A8_UNORM;
-            create_info.min_image_count = create_info.min_image_count.max(2);
-        });
+        self.mgr.windows.create_window(event_loop, &self.mgr.context, &WindowDescriptor {
+            title: String::from("Quantum Echoes"),
+            ..Default::default()
+        }, |_| {});
 
         self.simulator = Some(Simulator::new(&self.mgr));
         self.renderer = Some(QuadRenderer::new(&self.mgr, self.simulator.as_ref().unwrap()));
@@ -100,29 +88,20 @@ impl ApplicationHandler for App {
         self.simulator.as_ref().unwrap().compute(&self.mgr);
     } 
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         self.gui.as_mut().unwrap().update(&event);
-        let renderer = self.mgr.windows.get_renderer_mut(id).unwrap();
         let quad_renderer = self.renderer.as_mut().unwrap();
 
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             },
-            WindowEvent::Resized(_) => {
+            WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 quad_renderer.window_resized = true;
             },
-            WindowEvent::ScaleFactorChanged { .. } => {
-                quad_renderer.window_resized = true;
-            }
             WindowEvent::RedrawRequested => {
                 self.gui.as_mut().unwrap().immediate_ui(|gui| {
                     let ctx = gui.context();
-                    // egui::Window::new("Hello World")
-                    //     .show(&ctx, |ui| {
-                    //         ui.label("sup");
-                    //     });
-                        
                     egui::SidePanel::right("Hello").show(&ctx, |ui| {
                         ui.heading("Hello");
                         ui.vertical_centered(|ui| {
@@ -144,7 +123,7 @@ impl ApplicationHandler for App {
 }
 
 impl App {
-    pub fn new(event_loop: &EventLoop<()>) -> Arc<Self> {
+    pub fn new(_event_loop: &EventLoop<()>) -> Arc<Self> {
         let mgr = VulkanManager::new();
 
         Arc::new(App {
