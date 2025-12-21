@@ -1,3 +1,6 @@
+use vulkano::image::view::ImageView;
+use vulkano::render_pass::Framebuffer;
+use vulkano::render_pass::FramebufferCreateInfo;
 use vulkano::*;
 use vulkano::swapchain::*;
 use vulkano::instance::*;
@@ -7,94 +10,148 @@ use vulkano::memory::allocator::*;
 use vulkano::command_buffer::allocator::*;
 use vulkano::descriptor_set::allocator::*;
 
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
 use winit::window::*;
-use winit::event_loop::*;
+use winit::event_loop::{EventLoop, ActiveEventLoop};
+
+use egui_winit_vulkano::egui;
+use egui_winit_vulkano::Gui;
+use egui_winit_vulkano::GuiConfig;
+use egui::{ScrollArea, TextEdit, TextStyle};
+
+use vulkano::sync::{self, GpuFuture};
+
+use vulkano_util::{
+    context::{VulkanoConfig, VulkanoContext},
+    window::{VulkanoWindows, WindowDescriptor},
+};
 
 use std::sync::Arc;
 
-pub struct App {
-    pub physical_device: Arc<PhysicalDevice>,
-    pub device: Arc<Device>,
-    pub queue: Arc<Queue>,
+use crate::quad_renderer::QuadRenderer;
+use crate::simulator::Simulator;
 
-    pub window: Arc<Window>,    
-    pub surface: Arc<Surface>,
+
+pub struct VulkanManager {
+    pub context: VulkanoContext,
+    pub windows: VulkanoWindows,
 
     pub memory_allocator: Arc<StandardMemoryAllocator>,
     pub descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    pub command_buffer_allocator: StandardCommandBufferAllocator
+    pub command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+}
+
+impl VulkanManager {
+    pub fn new() -> Self {
+        let context = VulkanoContext::new(VulkanoConfig::default());
+        let windows = VulkanoWindows::default();
+
+        let memory_allocator         = Arc::new(StandardMemoryAllocator::new_default(context.device().clone()));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(context.device().clone(), StandardDescriptorSetAllocatorCreateInfo::default())); 
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(context.device().clone(), StandardCommandBufferAllocatorCreateInfo::default())); 
+
+        VulkanManager {
+            context,
+            windows,
+
+            memory_allocator,
+            descriptor_set_allocator,
+            command_buffer_allocator 
+        }
+    }
+}
+
+pub struct App {
+    pub mgr: VulkanManager,
+    pub renderer: Option<QuadRenderer>,
+    pub simulator: Option<Simulator>,
+
+    gui: Option<Gui>,
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.mgr.windows.create_window(event_loop, &self.mgr.context, &WindowDescriptor::default(), |create_info| {
+            // create_info.image_format = format::Format::R8G8B8A8_UNORM;
+            create_info.min_image_count = create_info.min_image_count.max(2);
+        });
+
+        self.simulator = Some(Simulator::new(&self.mgr));
+        self.renderer = Some(QuadRenderer::new(&self.mgr, self.simulator.as_ref().unwrap()));
+
+        let gui_config = GuiConfig {
+            allow_srgb_render_target: true,
+            is_overlay: true,
+            ..Default::default()
+        };
+
+        self.gui = Some({
+            let renderer = self.mgr.windows.get_primary_renderer_mut().unwrap();
+            Gui::new(
+                event_loop,
+                renderer.surface(),
+                renderer.graphics_queue(),
+                renderer.swapchain_format(),
+                gui_config,
+            )
+        });
+
+        self.simulator.as_ref().unwrap().compute(&self.mgr);
+    } 
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        self.gui.as_mut().unwrap().update(&event);
+        let renderer = self.mgr.windows.get_renderer_mut(id).unwrap();
+        let quad_renderer = self.renderer.as_mut().unwrap();
+
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            },
+            WindowEvent::Resized(_) => {
+                quad_renderer.window_resized = true;
+            },
+            WindowEvent::ScaleFactorChanged { .. } => {
+                quad_renderer.window_resized = true;
+            }
+            WindowEvent::RedrawRequested => {
+                self.gui.as_mut().unwrap().immediate_ui(|gui| {
+                    let ctx = gui.context();
+                    // egui::Window::new("Hello World")
+                    //     .show(&ctx, |ui| {
+                    //         ui.label("sup");
+                    //     });
+                        
+                    egui::SidePanel::right("Hello").show(&ctx, |ui| {
+                        ui.heading("Hello");
+                        ui.vertical_centered(|ui| {
+                            ui.add(egui::widgets::Label::new("Hi there!"));
+                        });
+                        ui.separator();
+                    });
+                });
+
+                quad_renderer.draw(&self.mgr, self.gui.as_mut().unwrap());
+            }
+            _ => (),
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        self.mgr.windows.get_primary_window().as_mut().unwrap().request_redraw();
+    }
 }
 
 impl App {
-    pub fn new(event_loop: &EventLoop<()>, window_title: &str) -> Self {
-        let required_extensions = Surface::required_extensions(&event_loop);
-        let device_extensions = DeviceExtensions {
-            khr_swapchain: true,
-            ..DeviceExtensions::empty()
-        }; 
+    pub fn new(event_loop: &EventLoop<()>) -> Arc<Self> {
+        let mgr = VulkanManager::new();
 
-        let library = VulkanLibrary::new().expect("No local Vulkan library/DLL. Cannot initialize app.");
-        let instance = Instance::new(
-            library,
-            InstanceCreateInfo {
-                flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
-                enabled_extensions: required_extensions,
-                ..Default::default()
-            }
-        ).expect("Failed to create instance");
-
-        let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
-        let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
-
-        // window.set_visible(false);
-        window.set_title(window_title);
-
-        // Create PhysicalDevice, Device, and Queue
-        let physical_device = instance.enumerate_physical_devices().unwrap().next().unwrap();
-        let queue_family_index = physical_device
-            .queue_family_properties()
-            .iter()
-            .position(|queue_family_properties| {
-                queue_family_properties.queue_flags.contains(QueueFlags::GRAPHICS)
-            })
-            .expect("couldn't find a graphical queue family") as u32;
-
-        let (device, mut queues) = Device::new(
-            physical_device.clone(),
-            DeviceCreateInfo {
-                queue_create_infos: vec![QueueCreateInfo {
-                    queue_family_index,
-                    ..Default::default()
-                }],
-                enabled_extensions: device_extensions,
-                ..Default::default()
-            }        
-        )
-        .expect("failed to create device");
-        let queue = queues.next().unwrap();
-
-        // Create Allocators
-        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
-        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
-            device.clone(),
-            StandardDescriptorSetAllocatorCreateInfo::default()
-        )); 
-        let command_buffer_allocator = StandardCommandBufferAllocator::new(
-            device.clone(),
-            StandardCommandBufferAllocatorCreateInfo::default()
-        ); 
-
-        App {
-            physical_device: physical_device,
-            device: device,
-            queue: queue,
-
-            window: window,
-            surface: surface,
-
-            memory_allocator: memory_allocator,
-            descriptor_set_allocator: descriptor_set_allocator,
-            command_buffer_allocator: command_buffer_allocator
-        }
+        Arc::new(App {
+            mgr,
+            renderer: None,
+            simulator: None,
+            gui: None,
+        })
     }
 }

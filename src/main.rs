@@ -1,6 +1,8 @@
 use winit::event_loop::*;
 use winit::event::*;
 
+use std::sync::Arc;
+
 mod app;
 mod quad_renderer;
 mod simulator;
@@ -10,30 +12,8 @@ use app::App;
 use simulator::Simulator;
 
 fn main() {
-    let event_loop = EventLoop::new();
-    let app = App::new(&event_loop, "Quantum Echoes");
-    let simulator = Simulator::new(&app);
-    let mut renderer = QuadRenderer::new(&app, &simulator);
-    simulator.compute(&app);
+    let event_loop = EventLoop::new().unwrap();
+    let mut app = App::new(&event_loop);
 
-    event_loop.run(move |event, _, control_flow| {
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                *control_flow = ControlFlow::Exit;
-            },
-            Event::WindowEvent {
-                event: WindowEvent::Resized(_),
-                ..
-            } => {
-                renderer.window_resized = true;
-            }
-            Event::MainEventsCleared => {
-                renderer.draw(&app);
-            }
-            _ => ()
-        }
-    }); 
+    event_loop.run_app(Arc::get_mut(&mut app).unwrap());
 }
