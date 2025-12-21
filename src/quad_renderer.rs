@@ -1,3 +1,6 @@
+use vulkano::descriptor_set::DescriptorSet;
+use vulkano::descriptor_set::PersistentDescriptorSet;
+use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::*;
 use vulkano::swapchain::*;
 use vulkano::memory::allocator::*;
@@ -16,14 +19,15 @@ use vulkano::shader::*;
 use std::sync::Arc;
 
 use crate::app::App;
+use crate::simulator::Simulator;
 
 #[derive(BufferContents, vertex_input::Vertex)]
 #[repr(C)]
 struct VertexContainer {
     #[format(R32G32_SFLOAT)]
     position: [f32; 2],
-    #[format(R32G32B32_SFLOAT)]
-    color: [f32; 3],
+    #[format(R32G32_SFLOAT)]
+    uv: [f32; 2],
 }
 
 pub struct QuadRenderer {
@@ -38,6 +42,8 @@ pub struct QuadRenderer {
     pipeline: Arc<GraphicsPipeline>,
     command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 
+    descriptor_set: Arc<PersistentDescriptorSet>,
+
     vertex_buffer: Subbuffer<[VertexContainer]>,
 
     pub window_resized: bool,
@@ -46,7 +52,7 @@ pub struct QuadRenderer {
 }
 
 impl QuadRenderer {
-    pub fn new(app: &App) -> Self {
+    pub fn new(app: &App, simulator: &Simulator) -> Self {
         mod vs {
             vulkano_shaders::shader! {
                 ty: "vertex",
@@ -73,12 +79,12 @@ impl QuadRenderer {
                 ..Default::default()
             },
             vec![
-                VertexContainer {position: [-1.0, -1.0], color: [1.0, 0.0, 0.0]},
-                VertexContainer {position: [-1.0,  1.0], color: [0.0, 1.0, 0.0]},
-                VertexContainer {position: [ 1.0,  1.0], color: [0.0, 0.0, 1.0]},
-                VertexContainer {position: [-1.0, -1.0], color: [1.0, 0.0, 0.0]},
-                VertexContainer {position: [ 1.0,  1.0], color: [0.0, 0.0, 1.0]},
-                VertexContainer {position: [ 1.0, -1.0], color: [1.0, 1.0, 0.0]}
+                VertexContainer {position: [-1.0, -1.0], uv: [0.0, 0.0]},
+                VertexContainer {position: [-1.0,  1.0], uv: [0.0, 1.0]},
+                VertexContainer {position: [ 1.0,  1.0], uv: [1.0, 1.0]},
+                VertexContainer {position: [-1.0, -1.0], uv: [0.0, 0.0]},
+                VertexContainer {position: [ 1.0,  1.0], uv: [1.0, 1.0]},
+                VertexContainer {position: [ 1.0, -1.0], uv: [1.0, 0.0]}
             ]
         ).unwrap();
 
@@ -91,7 +97,20 @@ impl QuadRenderer {
         let render_pass = Self::get_render_pass(app, &swapchain);
         let framebuffers = Self::get_framebuffers(&images, &render_pass);
         let pipeline = Self::get_pipeline(app, &vs, &fs, &render_pass, viewport.clone());
-        let command_buffers = Self::get_command_buffers(app, &pipeline, &framebuffers, &vertex_buffer);
+
+        let layout = &pipeline.layout().set_layouts()[0];
+        let descriptor_set = PersistentDescriptorSet::new(
+            &app.descriptor_set_allocator,
+            layout.clone(),
+            [
+                WriteDescriptorSet::sampler(0, simulator.grid_sampler.clone()),
+                WriteDescriptorSet::image_view(1, simulator.grid_view.clone()),
+            ],
+            [],
+        )
+        .unwrap(); 
+
+        let command_buffers = Self::get_command_buffers(app, &pipeline, &framebuffers, &vertex_buffer, &descriptor_set);
 
         QuadRenderer {
             vertex_shader: vs,
@@ -104,6 +123,7 @@ impl QuadRenderer {
             framebuffers,
             pipeline,
             command_buffers,
+            descriptor_set,
 
             vertex_buffer,
             window_resized: false,
@@ -188,7 +208,8 @@ impl QuadRenderer {
             app,
             &self.pipeline,
             &self.framebuffers,
-            &self.vertex_buffer
+            &self.vertex_buffer,
+            &self.descriptor_set
         );
     }
 
@@ -325,7 +346,8 @@ impl QuadRenderer {
         app: &App,
         pipeline: &Arc<GraphicsPipeline>,
         framebuffers: &Vec<Arc<Framebuffer>>,
-        vertex_buffer: &Subbuffer<[VertexContainer]>
+        vertex_buffer: &Subbuffer<[VertexContainer]>,
+        descriptor_set: &Arc<PersistentDescriptorSet>
     ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
         framebuffers
             .iter()
@@ -350,6 +372,13 @@ impl QuadRenderer {
                     )
                     .unwrap()
                     .bind_pipeline_graphics(pipeline.clone())
+                    .unwrap()
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::Graphics,
+                        pipeline.layout().clone(),
+                        0,
+                        descriptor_set.clone() 
+                    )
                     .unwrap()
                     .bind_vertex_buffers(0, vertex_buffer.clone())
                     .unwrap()
