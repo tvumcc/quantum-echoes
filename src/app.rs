@@ -3,7 +3,7 @@ use vulkano::command_buffer::allocator::*;
 use vulkano::descriptor_set::allocator::*;
 
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{ButtonId, MouseButton, WindowEvent};
 use winit::window::*;
 use winit::event_loop::{EventLoop, ActiveEventLoop};
 
@@ -65,7 +65,7 @@ impl ApplicationHandler for App {
         self.renderer = Some(QuadRenderer::new(&self.mgr, self.simulator.as_ref().unwrap()));
         self.ui_state = Some(UIState::new(&event_loop, &mut self.mgr));
 
-        self.simulator.as_ref().unwrap().compute(&self.mgr);
+        self.simulator.as_ref().unwrap().compute(&self.mgr, self.ui_state.as_ref().unwrap());
     } 
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -78,6 +78,16 @@ impl ApplicationHandler for App {
             },
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 quad_renderer.window_resized = true;
+            },
+            WindowEvent::MouseInput { device_id, state, button } => {
+                if state.is_pressed() && button == MouseButton::Left {
+                    self.ui_state.as_mut().unwrap().brush_enabled = 1 - self.ui_state.as_mut().unwrap().brush_enabled;
+                    println!("{}", self.ui_state.as_mut().unwrap().brush_enabled);
+                }
+                if state.is_pressed() && button == MouseButton::Right {
+                    self.simulator.as_ref().unwrap().compute(&self.mgr, self.ui_state.as_ref().unwrap());
+                    println!("computing...");
+                }
             },
             WindowEvent::RedrawRequested => {
                 self.ui_state.as_mut().unwrap().setup_gui();

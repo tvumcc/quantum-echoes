@@ -14,6 +14,7 @@ use vulkano::sync::{self, GpuFuture};
 use std::sync::Arc;
 
 use crate::app::VulkanManager;
+use crate::ui_state::UIState;
 
 pub struct Simulator {
     grid_u: Arc<Image>,
@@ -78,7 +79,7 @@ impl Simulator {
         }
     }
 
-    pub fn compute(&self, mgr: &VulkanManager) {
+    pub fn compute(&self, mgr: &VulkanManager, ui_state: &UIState) {
         let layout = self.pipeline.layout().set_layouts().get(0).unwrap();
         let set = DescriptorSet::new(
             mgr.descriptor_set_allocator.clone(),
@@ -95,6 +96,12 @@ impl Simulator {
         )
         .unwrap();
 
+        let push_constants = cs::PushConstantData {
+            // brush_x: ui_state.brush_x as f32,
+            // brush_y: ui_state.brush_y as f32,
+            brush_enabled: ui_state.brush_enabled as i32,
+        };
+
         unsafe {
             builder
                 .bind_pipeline_compute(self.pipeline.clone())
@@ -105,6 +112,8 @@ impl Simulator {
                     0,
                     set,
                 )
+                .unwrap()
+                .push_constants(self.pipeline.layout().clone(), 0, push_constants)
                 .unwrap()
                 .dispatch([1024, 1024, 1])
                 .unwrap();
