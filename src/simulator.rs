@@ -64,7 +64,7 @@ impl Simulator {
             SamplerCreateInfo {
                 mag_filter: sampler::Filter::Linear,
                 min_filter: sampler::Filter::Linear,
-                address_mode: [SamplerAddressMode::Repeat; 3],
+                address_mode: [SamplerAddressMode::ClampToEdge; 3],
                 ..Default::default()
             }
         ).unwrap();

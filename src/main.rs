@@ -5,6 +5,7 @@ use std::sync::Arc;
 mod app;
 mod quad_renderer;
 mod simulator;
+mod ui_state;
 
 use app::App;
 

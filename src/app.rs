@@ -7,10 +7,6 @@ use winit::event::WindowEvent;
 use winit::window::*;
 use winit::event_loop::{EventLoop, ActiveEventLoop};
 
-use egui_winit_vulkano::egui;
-use egui_winit_vulkano::Gui;
-use egui_winit_vulkano::GuiConfig;
-
 use vulkano_util::{
     context::{VulkanoConfig, VulkanoContext},
     window::{VulkanoWindows, WindowDescriptor},
@@ -20,6 +16,7 @@ use std::sync::Arc;
 
 use crate::quad_renderer::QuadRenderer;
 use crate::simulator::Simulator;
+use crate::ui_state::UIState;
 
 pub struct VulkanManager {
     pub context: VulkanoContext,
@@ -54,8 +51,7 @@ pub struct App {
     pub mgr: VulkanManager,
     pub renderer: Option<QuadRenderer>,
     pub simulator: Option<Simulator>,
-
-    gui: Option<Gui>,
+    pub ui_state: Option<UIState>,
 }
 
 impl ApplicationHandler for App {
@@ -67,29 +63,13 @@ impl ApplicationHandler for App {
 
         self.simulator = Some(Simulator::new(&self.mgr));
         self.renderer = Some(QuadRenderer::new(&self.mgr, self.simulator.as_ref().unwrap()));
-
-        let gui_config = GuiConfig {
-            allow_srgb_render_target: true,
-            is_overlay: true,
-            ..Default::default()
-        };
-
-        self.gui = Some({
-            let renderer = self.mgr.windows.get_primary_renderer_mut().unwrap();
-            Gui::new(
-                event_loop,
-                renderer.surface(),
-                renderer.graphics_queue(),
-                renderer.swapchain_format(),
-                gui_config,
-            )
-        });
+        self.ui_state = Some(UIState::new(&event_loop, &mut self.mgr));
 
         self.simulator.as_ref().unwrap().compute(&self.mgr);
     } 
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        self.gui.as_mut().unwrap().update(&event);
+        self.ui_state.as_mut().unwrap().handle_event(&event);
         let quad_renderer = self.renderer.as_mut().unwrap();
 
         match event {
@@ -100,18 +80,9 @@ impl ApplicationHandler for App {
                 quad_renderer.window_resized = true;
             },
             WindowEvent::RedrawRequested => {
-                self.gui.as_mut().unwrap().immediate_ui(|gui| {
-                    let ctx = gui.context();
-                    egui::SidePanel::right("Hello").show(&ctx, |ui| {
-                        ui.heading("Hello");
-                        ui.vertical_centered(|ui| {
-                            ui.add(egui::widgets::Label::new("Hi there!"));
-                        });
-                        ui.separator();
-                    });
-                });
+                self.ui_state.as_mut().unwrap().setup_gui();
 
-                quad_renderer.draw(&self.mgr, self.gui.as_mut().unwrap());
+                quad_renderer.draw(&self.mgr, self.ui_state.as_mut().unwrap());
             }
             _ => (),
         }
@@ -130,7 +101,7 @@ impl App {
             mgr,
             renderer: None,
             simulator: None,
-            gui: None,
+            ui_state: None,
         })
     }
 }

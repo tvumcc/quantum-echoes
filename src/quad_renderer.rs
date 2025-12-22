@@ -15,12 +15,11 @@ use vulkano::sync::{self, GpuFuture};
 use vulkano::render_pass::*;
 use vulkano::shader::*;
 
-use egui_winit_vulkano::Gui;
-
 use std::sync::Arc;
 
 use crate::app::VulkanManager;
 use crate::simulator::Simulator;
+use crate::ui_state::UIState;
 
 #[derive(BufferContents, vertex_input::Vertex)]
 #[repr(C)]
@@ -93,7 +92,7 @@ impl QuadRenderer {
 
         let (swapchain, images) = QuadRenderer::get_swapchain(mgr);
 
-        let viewport = Self::get_viewport(mgr);
+        let viewport = Self::get_viewport(mgr, 0.0);
         let render_pass = Self::get_render_pass(mgr, &swapchain);
         let framebuffers = Self::get_framebuffers(&images, &render_pass);
         let pipeline = Self::get_pipeline(mgr, &vs, &fs, &render_pass, viewport.clone());
@@ -132,7 +131,7 @@ impl QuadRenderer {
         }
     }
 
-    pub fn draw(&mut self, mgr: &VulkanManager, gui: &mut Gui) {
+    pub fn draw(&mut self, mgr: &VulkanManager, ui_state: &mut UIState) {
         let image_extent: [u32; 2] = mgr.windows.get_primary_window().unwrap().inner_size().into();
         if image_extent.contains(&0) {
             return;
@@ -146,7 +145,7 @@ impl QuadRenderer {
             
             if self.window_resized {
                 self.window_resized = false;
-                self.update_pipeline_and_command_buffers(mgr);
+                self.update_pipeline_and_command_buffers(mgr, &ui_state);
             }
         }
 
@@ -171,8 +170,7 @@ impl QuadRenderer {
             .then_execute(mgr.context.graphics_queue().clone(), self.command_buffers[image_i as usize].clone())
             .unwrap();
 
-
-        let after_future = gui.draw_on_image(future, ImageView::new_default(self.images[image_i as usize].clone()).unwrap())
+        let after_future = ui_state.gui.draw_on_image(future, ImageView::new_default(self.images[image_i as usize].clone()).unwrap())
             .then_swapchain_present(
                 mgr.context.graphics_queue().clone(),
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_i),
@@ -198,8 +196,8 @@ impl QuadRenderer {
         }
     }
 
-    pub fn update_pipeline_and_command_buffers(&mut self, mgr: &VulkanManager) {
-        self.viewport.extent = [(mgr.windows.get_primary_window().expect("HEY").inner_size().width) as f32, mgr.windows.get_primary_window().expect("HEY").inner_size().height as f32];
+    pub fn update_pipeline_and_command_buffers(&mut self, mgr: &VulkanManager, ui_state: &UIState) {
+        self.viewport = Self::get_viewport(mgr, ui_state.gui_width);
         self.pipeline = Self::get_pipeline(
             mgr,
             &self.vertex_shader,
@@ -255,10 +253,10 @@ impl QuadRenderer {
         ).unwrap()
     }
 
-    fn get_viewport(mgr: &VulkanManager) -> viewport::Viewport {
+    fn get_viewport(mgr: &VulkanManager, gui_width: f32) -> viewport::Viewport {
         viewport::Viewport {
-            offset: [0.0, 0.0],
-            extent: mgr.windows.get_primary_window().unwrap().inner_size().into(),
+            offset: [gui_width, 0.0],
+            extent: [((mgr.windows.get_primary_window().expect("HEY").inner_size().width) as f32 - gui_width).max(gui_width), mgr.windows.get_primary_window().expect("HEY").inner_size().height as f32],
             depth_range: 0.0..=1.0
         }
     }
