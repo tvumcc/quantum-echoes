@@ -22,6 +22,9 @@ pub struct Simulator {
     pub grid_sampler: Arc<Sampler>,
 
     pipeline: Arc<ComputePipeline>,
+
+    pub width: u32,
+    pub height: u32
 }
 
 impl Simulator {
@@ -30,7 +33,7 @@ impl Simulator {
             mgr.memory_allocator.clone(),
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
-                format: Format::R8G8B8A8_UNORM,
+                format: Format::R32G32B32A32_SFLOAT,
                 extent: [1024, 1024, 1],
                 usage: ImageUsage::STORAGE | ImageUsage::SAMPLED,
                 ..Default::default()
@@ -76,7 +79,41 @@ impl Simulator {
             grid_sampler,
 
             pipeline,
+            width: 1024,
+            height: 1024,
         }
+    }
+
+    pub fn resize(&mut self, mgr: &VulkanManager, width: u32, height: u32) {
+        self.grid_u = Image::new(
+            mgr.memory_allocator.clone(),
+            ImageCreateInfo {
+                image_type: ImageType::Dim2d,
+                format: Format::R32G32B32A32_SFLOAT,
+                extent: [width as u32, height as u32, 1],
+                usage: ImageUsage::STORAGE | ImageUsage::SAMPLED,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        self.grid_view = ImageView::new_default(self.grid_u.clone()).unwrap();
+        self.grid_sampler = Sampler::new(
+            mgr.context.device().clone(),
+            SamplerCreateInfo {
+                mag_filter: sampler::Filter::Linear,
+                min_filter: sampler::Filter::Linear,
+                address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                ..Default::default()
+            }
+        ).unwrap();
+
+        self.width = width;
+        self.height = height;
+        println!("new dims {} {}", self.width, self.height);
     }
 
     pub fn compute(&self, mgr: &VulkanManager, ui_state: &UIState) {
@@ -97,9 +134,10 @@ impl Simulator {
         .unwrap();
 
         let push_constants = cs::PushConstantData {
-            // brush_x: ui_state.brush_x as f32,
-            // brush_y: ui_state.brush_y as f32,
+            brush_x: ui_state.brush_x as i32,
+            brush_y: ui_state.brush_y as i32,
             brush_enabled: ui_state.brush_enabled as i32,
+            brush_radius: ui_state.brush_radius as i32,
         };
 
         unsafe {
@@ -115,7 +153,7 @@ impl Simulator {
                 .unwrap()
                 .push_constants(self.pipeline.layout().clone(), 0, push_constants)
                 .unwrap()
-                .dispatch([1024, 1024, 1])
+                .dispatch([self.width, self.height, 1])
                 .unwrap();
         }
 

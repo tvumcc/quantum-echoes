@@ -14,8 +14,8 @@ pub struct UIState {
     pub time_step: f32,
     pub brush_radius: i32,
 
-    pub brush_x: f32,
-    pub brush_y: f32,
+    pub brush_x: i32,
+    pub brush_y: i32,
     pub brush_enabled: i32,
 }
 
@@ -44,10 +44,10 @@ impl UIState {
             gui_width: 300f32,
 
             time_step: 0.01,
-            brush_radius: 3,
+            brush_radius: 10,
 
-            brush_x: 0.0,
-            brush_y: 0.0,
+            brush_x: 0,
+            brush_y: 0,
             brush_enabled: 0,
         }
     }

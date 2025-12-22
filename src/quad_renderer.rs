@@ -97,17 +97,7 @@ impl QuadRenderer {
         let framebuffers = Self::get_framebuffers(&images, &render_pass);
         let pipeline = Self::get_pipeline(mgr, &vs, &fs, &render_pass, viewport.clone());
 
-        let layout = &pipeline.layout().set_layouts()[0];
-        let descriptor_set = DescriptorSet::new(
-            mgr.descriptor_set_allocator.clone(),
-            layout.clone(),
-            [
-                WriteDescriptorSet::sampler(0, simulator.grid_sampler.clone()),
-                WriteDescriptorSet::image_view(1, simulator.grid_view.clone()),
-            ],
-            [],
-        )
-        .unwrap(); 
+        let descriptor_set = Self::get_descriptor_set(mgr, simulator, &pipeline);
 
         let command_buffers = Self::get_command_buffers(mgr, &pipeline, &framebuffers, &vertex_buffer, &descriptor_set);
 
@@ -131,7 +121,7 @@ impl QuadRenderer {
         }
     }
 
-    pub fn draw(&mut self, mgr: &VulkanManager, ui_state: &mut UIState) {
+    pub fn draw(&mut self, mgr: &VulkanManager, simulator: &Simulator, ui_state: &mut UIState) {
         let image_extent: [u32; 2] = mgr.windows.get_primary_window().unwrap().inner_size().into();
         if image_extent.contains(&0) {
             return;
@@ -145,7 +135,7 @@ impl QuadRenderer {
             
             if self.window_resized {
                 self.window_resized = false;
-                self.update_pipeline_and_command_buffers(mgr, &ui_state);
+                self.update_pipeline_and_command_buffers(mgr, simulator, &ui_state);
             }
         }
 
@@ -196,7 +186,7 @@ impl QuadRenderer {
         }
     }
 
-    pub fn update_pipeline_and_command_buffers(&mut self, mgr: &VulkanManager, ui_state: &UIState) {
+    pub fn update_pipeline_and_command_buffers(&mut self, mgr: &VulkanManager, simulator: &Simulator, ui_state: &UIState) {
         self.viewport = Self::get_viewport(mgr, ui_state.gui_width);
         self.pipeline = Self::get_pipeline(
             mgr,
@@ -205,6 +195,7 @@ impl QuadRenderer {
             &self.render_pass,
             self.viewport.clone()
         );
+        self.descriptor_set = Self::get_descriptor_set(mgr, simulator, &self.pipeline);
         self.command_buffers = Self::get_command_buffers(
             mgr,
             &self.pipeline,
@@ -396,5 +387,19 @@ impl QuadRenderer {
                 builder.build().unwrap()
             })
             .collect() 
+    }
+
+    fn get_descriptor_set(mgr: &VulkanManager, simulator: &Simulator, pipeline: &Arc<GraphicsPipeline>) -> Arc<DescriptorSet> {
+        let layout = &pipeline.layout().set_layouts()[0];
+        DescriptorSet::new(
+            mgr.descriptor_set_allocator.clone(),
+            layout.clone(),
+            [
+                WriteDescriptorSet::sampler(0, simulator.grid_sampler.clone()),
+                WriteDescriptorSet::image_view(1, simulator.grid_view.clone()),
+            ],
+            [],
+        )
+        .unwrap() 
     }
 }

@@ -69,8 +69,11 @@ impl ApplicationHandler for App {
     } 
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        self.ui_state.as_mut().unwrap().handle_event(&event);
+        let ui_state = self.ui_state.as_mut().unwrap();
+        let simulator = self.simulator.as_mut().unwrap();
+        ui_state.handle_event(&event);
         let quad_renderer = self.renderer.as_mut().unwrap();
+        let window = self.mgr.windows.get_primary_window().unwrap();
 
         match event {
             WindowEvent::CloseRequested => {
@@ -78,21 +81,27 @@ impl ApplicationHandler for App {
             },
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 quad_renderer.window_resized = true;
+                simulator.resize(&self.mgr, (window.inner_size().width - ui_state.gui_width as u32) as u32 / 3, window.inner_size().height as u32 / 3);
             },
             WindowEvent::MouseInput { device_id, state, button } => {
                 if state.is_pressed() && button == MouseButton::Left {
-                    self.ui_state.as_mut().unwrap().brush_enabled = 1 - self.ui_state.as_mut().unwrap().brush_enabled;
-                    println!("{}", self.ui_state.as_mut().unwrap().brush_enabled);
-                }
-                if state.is_pressed() && button == MouseButton::Right {
-                    self.simulator.as_ref().unwrap().compute(&self.mgr, self.ui_state.as_ref().unwrap());
-                    println!("computing...");
+                    ui_state.brush_enabled = 1;
+                    println!("{}", ui_state.brush_enabled);
+                } else if !state.is_pressed() && button == MouseButton::Left {
+                    ui_state.brush_enabled = 0;
+                    println!("{}", ui_state.brush_enabled);
                 }
             },
+            WindowEvent::CursorMoved { device_id, position } => {
+                ui_state.brush_x = (position.x as i32 - ui_state.gui_width as i32) / 3;
+                ui_state.brush_y = position.y as i32 / 3;
+                println!("({}, {})", ui_state.brush_x, ui_state.brush_y);
+            },
             WindowEvent::RedrawRequested => {
-                self.ui_state.as_mut().unwrap().setup_gui();
+                ui_state.setup_gui();
 
-                quad_renderer.draw(&self.mgr, self.ui_state.as_mut().unwrap());
+                simulator.compute(&self.mgr, ui_state);
+                quad_renderer.draw(&self.mgr, simulator, ui_state);
             }
             _ => (),
         }
