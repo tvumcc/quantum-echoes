@@ -29,5 +29,7 @@ vec3 turbo(float t) {
 }
 
 void main() {
-    f_color = vec4(turbo(texture(sampler2D(tex, s), out_uv).r), 1.0);
+    vec4 color = texture(sampler2D(tex, s), out_uv);
+
+    f_color = vec4(turbo(sqrt(color.r * color.r + color.g * color.g)), 1.0);
 }

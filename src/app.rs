@@ -3,7 +3,7 @@ use vulkano::command_buffer::allocator::*;
 use vulkano::descriptor_set::allocator::*;
 
 use winit::application::ApplicationHandler;
-use winit::event::{ButtonId, MouseButton, WindowEvent};
+use winit::event::{MouseButton, WindowEvent};
 use winit::window::*;
 use winit::event_loop::{EventLoop, ActiveEventLoop};
 
@@ -58,6 +58,7 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.mgr.windows.create_window(event_loop, &self.mgr.context, &WindowDescriptor {
             title: String::from("Quantum Echoes"),
+            transparent: false,
             ..Default::default()
         }, |_| {});
 
@@ -75,27 +76,26 @@ impl ApplicationHandler for App {
         let quad_renderer = self.renderer.as_mut().unwrap();
         let window = self.mgr.windows.get_primary_window().unwrap();
 
+        let resolution = 5;
+
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             },
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 quad_renderer.window_resized = true;
-                simulator.resize(&self.mgr, (window.inner_size().width - ui_state.gui_width as u32) as u32 / 3, window.inner_size().height as u32 / 3);
+                simulator.resize(&self.mgr, (window.inner_size().width - ui_state.gui_width as u32) as u32 / resolution, window.inner_size().height as u32 / resolution);
             },
-            WindowEvent::MouseInput { device_id, state, button } => {
+            WindowEvent::MouseInput { device_id: _, state, button } => {
                 if state.is_pressed() && button == MouseButton::Left {
                     ui_state.brush_enabled = 1;
-                    println!("{}", ui_state.brush_enabled);
                 } else if !state.is_pressed() && button == MouseButton::Left {
                     ui_state.brush_enabled = 0;
-                    println!("{}", ui_state.brush_enabled);
                 }
             },
-            WindowEvent::CursorMoved { device_id, position } => {
-                ui_state.brush_x = (position.x as i32 - ui_state.gui_width as i32) / 3;
-                ui_state.brush_y = position.y as i32 / 3;
-                println!("({}, {})", ui_state.brush_x, ui_state.brush_y);
+            WindowEvent::CursorMoved { device_id: _, position } => {
+                ui_state.brush_x = ((position.x - ui_state.gui_width as f64) / resolution as f64) as i32;
+                ui_state.brush_y = (position.y / resolution as f64) as i32;
             },
             WindowEvent::RedrawRequested => {
                 ui_state.setup_gui();

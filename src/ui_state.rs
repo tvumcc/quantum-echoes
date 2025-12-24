@@ -44,7 +44,7 @@ impl UIState {
             gui_width: 300f32,
 
             time_step: 0.01,
-            brush_radius: 10,
+            brush_radius: 4,
 
             brush_x: 0,
             brush_y: 0,
@@ -71,7 +71,7 @@ impl UIState {
                 egui::ScrollArea::horizontal()
                     .show(ui, |ui|{
                         ui.add(egui::widgets::Slider::new(&mut self.time_step, 0.0..=1.0).text("Time Step"));
-                        ui.add(egui::widgets::Slider::new(&mut self.brush_radius, 1..=20).text("Brush Radius"));
+                        ui.add(egui::widgets::Slider::new(&mut self.brush_radius, 1..=8).text("Brush Radius"));
                         ui.spacing();
                         ui.separator();
                     });

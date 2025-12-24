@@ -113,7 +113,6 @@ impl Simulator {
 
         self.width = width;
         self.height = height;
-        println!("new dims {} {}", self.width, self.height);
     }
 
     pub fn compute(&self, mgr: &VulkanManager, ui_state: &UIState) {
