@@ -38,23 +38,6 @@ float potential(int x, int y) {
     return imageLoad(img, ivec2(x, y)).b;
 }
 
-// float du_dt(int x, int y) {
-//     float dx = 1.0;
-//     float dt = 0.25;
-
-//     float du_dx_0 = (U(x, y) - U(x-1, y)) / dx;
-//     float du_dx_1 = (U(x+1, y) - U(x, y)) / dx;
-
-//     float du_dy_0 = (U(x, y) - U(x, y-1)) / dx;
-//     float du_dy_1 = (U(x, y+1) - U(x, y)) / dx;
-
-//     float d2u_dx2 = (du_dx_1 - du_dx_0) / dx;
-//     float d2u_dy2 = (du_dy_1 - du_dy_0) / dx;
-
-//     float c = dt / dx; // Follow CFL
-//     return pow(c, 2) * (d2u_dx2 + d2u_dy2);
-// }
-
 float du_dt(int x, int y) {
     float dx = 1.0;
 

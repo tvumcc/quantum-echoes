@@ -1,6 +1,7 @@
 use vulkano::memory::allocator::*;
-use vulkano::command_buffer::allocator::*;
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, allocator::*};
 use vulkano::descriptor_set::allocator::*;
+use vulkano::sync::{self, GpuFuture};
 
 use winit::application::ApplicationHandler;
 use winit::event::{MouseButton, WindowEvent};
@@ -45,6 +46,26 @@ impl VulkanManager {
             command_buffer_allocator 
         }
     }
+
+    pub fn get_compute_cmdbuffer_builder(&self) -> AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
+        AutoCommandBufferBuilder::primary(
+            self.command_buffer_allocator.clone(),
+            self.context.compute_queue().queue_family_index(), 
+            CommandBufferUsage::OneTimeSubmit
+        ).unwrap()
+    }
+
+    pub fn execute_compute_cmdbuffer_from_builder(&self, builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) {
+        let command_buffer = builder.build().unwrap();
+
+        let future = sync::now(self.context.device().clone())
+            .then_execute(self.context.compute_queue().clone(), command_buffer)
+            .unwrap()
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+    }
 }
 
 pub struct App {
@@ -58,7 +79,6 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.mgr.windows.create_window(event_loop, &self.mgr.context, &WindowDescriptor {
             title: String::from("Quantum Echoes"),
-            transparent: false,
             ..Default::default()
         }, |_| {});
 
@@ -76,7 +96,7 @@ impl ApplicationHandler for App {
         let quad_renderer = self.renderer.as_mut().unwrap();
         let window = self.mgr.windows.get_primary_window().unwrap();
 
-        let resolution = 5;
+        let resolution = 2;
 
         match event {
             WindowEvent::CloseRequested => {

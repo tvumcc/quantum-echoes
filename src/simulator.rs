@@ -1,4 +1,4 @@
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage};
+use vulkano::command_buffer::ClearColorImageInfo;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
 use vulkano::image::sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo};
 use vulkano::image::view::ImageView;
@@ -8,8 +8,6 @@ use vulkano::format::*;
 use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::pipeline::{ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
-
-use vulkano::sync::{self, GpuFuture};
 
 use std::sync::Arc;
 
@@ -29,21 +27,8 @@ pub struct Simulator {
 
 impl Simulator {
     pub fn new(mgr: &VulkanManager) -> Self {
-        let grid_u = Image::new(
-            mgr.memory_allocator.clone(),
-            ImageCreateInfo {
-                image_type: ImageType::Dim2d,
-                format: Format::R32G32B32A32_SFLOAT,
-                extent: [1024, 1024, 1],
-                usage: ImageUsage::STORAGE | ImageUsage::SAMPLED,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let width = 1;
+        let height = 1;
 
         let pipeline = {
             let cs = cs::load(mgr.context.device().clone()).unwrap().entry_point("main").unwrap();
@@ -62,6 +47,7 @@ impl Simulator {
             ).unwrap()
         };
 
+        let grid_u = Self::get_grid_image(mgr, width, height);
         let grid_view = ImageView::new_default(grid_u.clone()).unwrap();
         let grid_sampler = Sampler::new(
             mgr.context.device().clone(),
@@ -79,19 +65,19 @@ impl Simulator {
             grid_sampler,
 
             pipeline,
-            width: 1024,
-            height: 1024,
+            width,
+            height,
         }
     }
 
-    pub fn resize(&mut self, mgr: &VulkanManager, width: u32, height: u32) {
-        self.grid_u = Image::new(
+    pub fn get_grid_image(mgr: &VulkanManager, width: u32, height: u32) -> Arc<Image> {
+        Image::new(
             mgr.memory_allocator.clone(),
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
                 format: Format::R32G32B32A32_SFLOAT,
-                extent: [width as u32, height as u32, 1],
-                usage: ImageUsage::STORAGE | ImageUsage::SAMPLED,
+                extent: [width, height, 1],
+                usage: ImageUsage::STORAGE | ImageUsage::SAMPLED | ImageUsage::TRANSFER_DST,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -99,20 +85,28 @@ impl Simulator {
                 ..Default::default()
             },
         )
-        .unwrap();
-        self.grid_view = ImageView::new_default(self.grid_u.clone()).unwrap();
-        self.grid_sampler = Sampler::new(
-            mgr.context.device().clone(),
-            SamplerCreateInfo {
-                mag_filter: sampler::Filter::Linear,
-                min_filter: sampler::Filter::Linear,
-                address_mode: [SamplerAddressMode::ClampToEdge; 3],
-                ..Default::default()
-            }
-        ).unwrap();
+        .unwrap()
+    }
 
+    pub fn resize(&mut self, mgr: &VulkanManager, width: u32, height: u32) {
         self.width = width;
         self.height = height;
+        self.grid_u = Self::get_grid_image(mgr, width, height);
+        self.grid_view = ImageView::new_default(self.grid_u.clone()).unwrap();
+        self.zero_grid(mgr);
+    }
+
+    pub fn zero_grid(&self, mgr: &VulkanManager) {
+        let mut builder = mgr.get_compute_cmdbuffer_builder();
+
+        builder
+            .clear_color_image(ClearColorImageInfo {
+                clear_value: ClearColorValue::Float([0.0, 0.0, 0.0, 0.0]),
+                ..ClearColorImageInfo::image(self.grid_u.clone())
+            })
+            .unwrap();
+
+        mgr.execute_compute_cmdbuffer_from_builder(builder);
     }
 
     pub fn compute(&self, mgr: &VulkanManager, ui_state: &UIState) {
@@ -125,12 +119,7 @@ impl Simulator {
         )
         .unwrap(); 
 
-        let mut builder = AutoCommandBufferBuilder::primary(
-            mgr.command_buffer_allocator.clone(),
-            mgr.context.compute_queue().queue_family_index(),
-            CommandBufferUsage::OneTimeSubmit,
-        )
-        .unwrap();
+        let mut builder = mgr.get_compute_cmdbuffer_builder();
 
         let push_constants = cs::PushConstantData {
             brush_x: ui_state.brush_x as i32,
@@ -156,15 +145,7 @@ impl Simulator {
                 .unwrap();
         }
 
-        let command_buffer = builder.build().unwrap();
-
-        let future = sync::now(mgr.context.device().clone())
-            .then_execute(mgr.context.compute_queue().clone(), command_buffer)
-            .unwrap()
-            .then_signal_fence_and_flush()
-            .unwrap();
-
-        future.wait(None).unwrap();
+        mgr.execute_compute_cmdbuffer_from_builder(builder);
     }
 }
 
