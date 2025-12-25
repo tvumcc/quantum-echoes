@@ -6,6 +6,9 @@ layout (location = 0) in vec2 out_uv;
 layout (set = 0, binding = 0) uniform sampler s;
 layout (set = 0, binding = 1) uniform texture2D tex;
 
+layout (push_constant) uniform PushConstantData {
+    int visible_layer;
+} pc;
 
 // taken from https://www.shadertoy.com/view/WlfXRN
 vec3 plasma(float t) {
@@ -30,6 +33,15 @@ vec3 turbo(float t) {
 
 void main() {
     vec4 color = texture(sampler2D(tex, s), out_uv);
+    int layer = pc.visible_layer;
 
-    f_color = vec4(turbo(sqrt(color.r * color.r + color.g * color.g)), 1.0);
+    float layers[5] = {
+        color.r, // Real
+        color.g, // Imaginary
+        color.r * color.r + color.g * color.g, // Probability
+        color.b, // Potential
+        color.a  // Boundary
+    };
+
+    f_color = vec4(turbo(layers[layer]) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
 }

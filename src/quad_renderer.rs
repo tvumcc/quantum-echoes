@@ -52,21 +52,7 @@ pub struct QuadRenderer {
 }
 
 impl QuadRenderer {
-    pub fn new(mgr: &VulkanManager, simulator: &Simulator) -> Self {
-        mod vs {
-            vulkano_shaders::shader! {
-                ty: "vertex",
-                path: "vert.glsl"
-            }
-        }
-
-        mod fs {
-            vulkano_shaders::shader! {
-                ty: "fragment",
-                path: "frag.glsl"
-            }
-        }
-
+    pub fn new(mgr: &VulkanManager, simulator: &Simulator, ui_state: &UIState) -> Self {
         let vertex_buffer = Buffer::from_iter(
             mgr.memory_allocator.clone(),
             BufferCreateInfo {
@@ -99,7 +85,7 @@ impl QuadRenderer {
 
         let descriptor_set = Self::get_descriptor_set(mgr, simulator, &pipeline);
 
-        let command_buffers = Self::get_command_buffers(mgr, &pipeline, &framebuffers, &vertex_buffer, &descriptor_set);
+        let command_buffers = Self::get_command_buffers(mgr, ui_state, &pipeline, &framebuffers, &vertex_buffer, &descriptor_set);
 
         QuadRenderer {
             vertex_shader: vs,
@@ -135,7 +121,7 @@ impl QuadRenderer {
             
             if self.window_resized {
                 self.window_resized = false;
-                self.update_pipeline_and_command_buffers(mgr, simulator, &ui_state);
+                self.update(mgr, simulator, &ui_state);
             }
         }
 
@@ -186,7 +172,7 @@ impl QuadRenderer {
         }
     }
 
-    pub fn update_pipeline_and_command_buffers(&mut self, mgr: &VulkanManager, simulator: &Simulator, ui_state: &UIState) {
+    pub fn update(&mut self, mgr: &VulkanManager, simulator: &Simulator, ui_state: &UIState) {
         self.viewport = Self::get_viewport(mgr, ui_state.gui_width);
         self.pipeline = Self::get_pipeline(
             mgr,
@@ -196,13 +182,11 @@ impl QuadRenderer {
             self.viewport.clone()
         );
         self.descriptor_set = Self::get_descriptor_set(mgr, simulator, &self.pipeline);
-        self.command_buffers = Self::get_command_buffers(
-            mgr,
-            &self.pipeline,
-            &self.framebuffers,
-            &self.vertex_buffer,
-            &self.descriptor_set
-        );
+        self.update_command_buffers(mgr, ui_state);
+    }
+
+    pub fn update_command_buffers(&mut self, mgr: &VulkanManager, ui_state: &UIState) {
+        self.command_buffers = Self::get_command_buffers(mgr, ui_state, &self.pipeline, &self.framebuffers, &self.vertex_buffer, &self.descriptor_set) 
     }
 
     pub fn recreate_swapchain(&mut self, mgr: &VulkanManager) {
@@ -339,11 +323,16 @@ impl QuadRenderer {
 
     fn get_command_buffers(
         mgr: &VulkanManager,
+        ui_state: &UIState,
         pipeline: &Arc<GraphicsPipeline>,
         framebuffers: &Vec<Arc<Framebuffer>>,
         vertex_buffer: &Subbuffer<[VertexContainer]>,
         descriptor_set: &Arc<DescriptorSet>
     ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
+        let push_constants = fs::PushConstantData {
+            visible_layer: ui_state.visible_layer as i32,
+        };
+
         framebuffers
             .iter()
             .map(|framebuffer| {
@@ -368,6 +357,8 @@ impl QuadRenderer {
                         )
                         .unwrap()
                         .bind_pipeline_graphics(pipeline.clone())
+                        .unwrap()
+                        .push_constants(pipeline.layout().clone(), 0, push_constants)
                         .unwrap()
                         .bind_descriptor_sets(
                             PipelineBindPoint::Graphics,
@@ -401,5 +392,19 @@ impl QuadRenderer {
             [],
         )
         .unwrap() 
+    }
+}
+
+mod vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "vert.glsl"
+    }
+}
+
+mod fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "frag.glsl"
     }
 }

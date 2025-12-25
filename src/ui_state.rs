@@ -6,17 +6,31 @@ use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 
 use crate::app::VulkanManager;
+use crate::quad_renderer::QuadRenderer;
+use crate::simulator::Simulator;
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum SimulationLayer {
+    Real = 0,
+    Imaginary,
+    Probability,
+    Potential,
+}
 
 pub struct UIState {
     pub gui: Gui,
     pub gui_width: f32,
 
     pub time_step: f32,
-    pub brush_radius: i32,
 
     pub brush_x: i32,
     pub brush_y: i32,
     pub brush_enabled: i32,
+    pub brush_radius: i32,
+    pub brush_value: i32,
+
+    pub visible_layer: SimulationLayer,
+    pub brush_layer: SimulationLayer,
 }
 
 impl UIState {
@@ -44,11 +58,15 @@ impl UIState {
             gui_width: 300f32,
 
             time_step: 0.01,
-            brush_radius: 4,
 
             brush_x: 0,
             brush_y: 0,
             brush_enabled: 0,
+            brush_radius: 2,
+            brush_value: 2,
+
+            brush_layer: SimulationLayer::Real,
+            visible_layer: SimulationLayer::Probability,
         }
     }
 
@@ -56,8 +74,9 @@ impl UIState {
         self.gui.update(&event);
     }
 
-    pub fn setup_gui(&mut self) {
+    pub fn setup_gui(&mut self, mgr: &VulkanManager, renderer: &mut QuadRenderer, simulator: &Simulator) {
         let side_panel = egui::SidePanel::new(egui::panel::Side::Left, "side-panel");
+        let prev_visible_layer = self.visible_layer;
 
         self.gui.immediate_ui(|gui| {
             let ctx = gui.context();
@@ -70,12 +89,39 @@ impl UIState {
 
                 egui::ScrollArea::horizontal()
                     .show(ui, |ui|{
-                        ui.add(egui::widgets::Slider::new(&mut self.time_step, 0.0..=1.0).text("Time Step"));
+                        ui.add(egui::widgets::Slider::new(&mut self.time_step, 0.0..=0.06).text("Time Step"));
                         ui.add(egui::widgets::Slider::new(&mut self.brush_radius, 1..=8).text("Brush Radius"));
+                        ui.add(egui::widgets::Slider::new(&mut self.brush_value, 1..=10).text("Brush Value"));
                         ui.spacing();
                         ui.separator();
+                        if ui.button("Reset Grid").clicked() {
+                            simulator.zero_grid(mgr);
+                        }
+
+                        egui::ComboBox::from_label("Visible Layer")
+                            .selected_text(format!("{:?}", self.visible_layer))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.visible_layer, SimulationLayer::Real, "Real");
+                                ui.selectable_value(&mut self.visible_layer, SimulationLayer::Imaginary, "Imaginary");
+                                ui.selectable_value(&mut self.visible_layer, SimulationLayer::Probability, "Probability");
+                            }
+                        );
+
+                        egui::ComboBox::from_label("Brush Layer")
+                            .selected_text(format!("{:?}", self.brush_layer))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.brush_layer, SimulationLayer::Real, "Real");
+                                ui.selectable_value(&mut self.brush_layer, SimulationLayer::Imaginary, "Imaginary");
+                                ui.selectable_value(&mut self.brush_layer, SimulationLayer::Potential, "Potential");
+                            }
+                        );
+
                     });
             });
         });
+
+        if prev_visible_layer != self.visible_layer {
+            renderer.update_command_buffers(mgr, self);
+        }
     }
 }

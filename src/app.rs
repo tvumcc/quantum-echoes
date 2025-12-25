@@ -83,8 +83,8 @@ impl ApplicationHandler for App {
         }, |_| {});
 
         self.simulator = Some(Simulator::new(&self.mgr));
-        self.renderer = Some(QuadRenderer::new(&self.mgr, self.simulator.as_ref().unwrap()));
         self.ui_state = Some(UIState::new(&event_loop, &mut self.mgr));
+        self.renderer = Some(QuadRenderer::new(&self.mgr, self.simulator.as_ref().unwrap(), self.ui_state.as_ref().unwrap()));
 
         self.simulator.as_ref().unwrap().compute(&self.mgr, self.ui_state.as_ref().unwrap());
     } 
@@ -96,7 +96,7 @@ impl ApplicationHandler for App {
         let quad_renderer = self.renderer.as_mut().unwrap();
         let window = self.mgr.windows.get_primary_window().unwrap();
 
-        let resolution = 2;
+        let resolution = 5;
 
         match event {
             WindowEvent::CloseRequested => {
@@ -118,7 +118,7 @@ impl ApplicationHandler for App {
                 ui_state.brush_y = (position.y / resolution as f64) as i32;
             },
             WindowEvent::RedrawRequested => {
-                ui_state.setup_gui();
+                ui_state.setup_gui(&self.mgr, quad_renderer, simulator);
 
                 simulator.compute(&self.mgr, ui_state);
                 quad_renderer.draw(&self.mgr, simulator, ui_state);

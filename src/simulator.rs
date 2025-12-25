@@ -122,10 +122,13 @@ impl Simulator {
         let mut builder = mgr.get_compute_cmdbuffer_builder();
 
         let push_constants = cs::PushConstantData {
-            brush_x: ui_state.brush_x as i32,
-            brush_y: ui_state.brush_y as i32,
-            brush_enabled: ui_state.brush_enabled as i32,
-            brush_radius: ui_state.brush_radius as i32,
+            time_step: ui_state.time_step,
+            brush_x: ui_state.brush_x,
+            brush_y: ui_state.brush_y,
+            brush_enabled: ui_state.brush_enabled,
+            brush_radius: ui_state.brush_radius,
+            brush_value: ui_state.brush_value,
+            brush_layer: ui_state.brush_layer as i32,
         };
 
         unsafe {
