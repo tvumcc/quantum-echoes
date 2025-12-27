@@ -119,9 +119,10 @@ impl Simulator {
         )
         .unwrap(); 
 
-        let mut builder = mgr.get_compute_cmdbuffer_builder();
+        let mut stage0_builder = mgr.get_compute_cmdbuffer_builder();
+        let mut stage1_builder = mgr.get_compute_cmdbuffer_builder();
 
-        let push_constants = cs::PushConstantData {
+        let mut push_constants = cs::PushConstantData {
             time_step: ui_state.time_step,
             brush_x: ui_state.brush_x,
             brush_y: ui_state.brush_y,
@@ -129,17 +130,18 @@ impl Simulator {
             brush_radius: ui_state.brush_radius,
             brush_value: ui_state.brush_value,
             brush_layer: ui_state.brush_layer as i32,
+            stage: 0,
         };
 
         unsafe {
-            builder
+            stage0_builder
                 .bind_pipeline_compute(self.pipeline.clone())
                 .unwrap()
                 .bind_descriptor_sets(
                     PipelineBindPoint::Compute,
                     self.pipeline.layout().clone(),
                     0,
-                    set,
+                    set.clone(),
                 )
                 .unwrap()
                 .push_constants(self.pipeline.layout().clone(), 0, push_constants)
@@ -148,7 +150,27 @@ impl Simulator {
                 .unwrap();
         }
 
-        mgr.execute_compute_cmdbuffer_from_builder(builder);
+        push_constants.stage = 1;
+
+        unsafe {
+            stage1_builder
+                .bind_pipeline_compute(self.pipeline.clone())
+                .unwrap()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Compute,
+                    self.pipeline.layout().clone(),
+                    0,
+                    set.clone(),
+                )
+                .unwrap()
+                .push_constants(self.pipeline.layout().clone(), 0, push_constants)
+                .unwrap()
+                .dispatch([self.width, self.height, 1])
+                .unwrap();
+        }
+
+        mgr.execute_compute_cmdbuffer_from_builder(stage0_builder);
+        mgr.execute_compute_cmdbuffer_from_builder(stage1_builder);
     }
 }
 

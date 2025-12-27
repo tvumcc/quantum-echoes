@@ -38,10 +38,12 @@ void main() {
     float layers[5] = {
         color.r, // Real
         color.g, // Imaginary
-        color.r * color.r + color.g * color.g, // Probability
+        (color.r * color.r + color.g * color.g), // Probability
         color.b, // Potential
         color.a  // Boundary
     };
 
-    f_color = vec4(turbo(layers[layer]) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
+    float prob = color.r * color.r + color.g * color.a;
+
+    f_color = vec4(turbo(prob) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
 }
