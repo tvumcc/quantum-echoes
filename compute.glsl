@@ -1,9 +1,10 @@
 #version 460
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout (push_constant) uniform PushConstantData {
+layout(push_constant) uniform PushConstantData {
     float time_step;
+    float theta;
     int brush_x;
     int brush_y;
     int brush_enabled;
@@ -13,16 +14,15 @@ layout (push_constant) uniform PushConstantData {
     int stage;
 } pc;
 
-layout (set = 0, binding = 0, rgba32f) uniform image2D img;
-
+layout(set = 0, binding = 0, rgba32f) uniform image2D img;
 
 float U(int x, int y) {
     if (x < 0)
-        x = imageSize(img).x-1;
+        x = imageSize(img).x - 1;
     if (x >= imageSize(img).x)
         x = 0;
     if (y < 0)
-        y = imageSize(img).y-1;
+        y = imageSize(img).y - 1;
     if (y >= imageSize(img).y)
         y = 0;
     // if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
@@ -36,11 +36,11 @@ float U(ivec2 location) {
 
 float V(int x, int y) {
     if (x < 0)
-        x = imageSize(img).x-1;
+        x = imageSize(img).x - 1;
     if (x >= imageSize(img).x)
         x = 0;
     if (y < 0)
-        y = imageSize(img).y-1;
+        y = imageSize(img).y - 1;
     if (y >= imageSize(img).y)
         y = 0;
     // if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
@@ -66,11 +66,11 @@ float du_dt(int x, int y) {
     float dx = 1.0;
 
     float v = V(x, y);
-    float dv_dx_0 = (v - V(x-1, y)) / dx;
-    float dv_dx_1 = (V(x+1, y) - v) / dx;
+    float dv_dx_0 = (v - V(x - 1, y)) / dx;
+    float dv_dx_1 = (V(x + 1, y) - v) / dx;
 
-    float dv_dy_0 = (v - V(x, y-1)) / dx;
-    float dv_dy_1 = (V(x, y+1) - v) / dx;
+    float dv_dy_0 = (v - V(x, y - 1)) / dx;
+    float dv_dy_1 = (V(x, y + 1) - v) / dx;
 
     float d2v_dx2 = (dv_dx_1 - dv_dx_0) / dx;
     float d2v_dy2 = (dv_dy_1 - dv_dy_0) / dx;
@@ -86,11 +86,11 @@ float dv_dt(int x, int y) {
     float dx = 1.0;
 
     float u = U(x, y);
-    float du_dx_0 = (u - U(x-1, y)) / dx;
-    float du_dx_1 = (U(x+1, y) - u) / dx;
+    float du_dx_0 = (u - U(x - 1, y)) / dx;
+    float du_dx_1 = (U(x + 1, y) - u) / dx;
 
-    float du_dy_0 = (u - U(x, y-1)) / dx;
-    float du_dy_1 = (U(x, y+1) - u) / dx;
+    float du_dy_0 = (u - U(x, y - 1)) / dx;
+    float du_dy_1 = (U(x, y + 1) - u) / dx;
 
     float d2u_dx2 = (du_dx_1 - du_dx_0) / dx;
     float d2u_dy2 = (du_dy_1 - du_dy_0) / dx;
@@ -121,11 +121,10 @@ void main() {
     float old_v = grid_cell.a;
 
     float pi = 3.14159265;
-    float theta = pi / 2.0;
     float s = 2.5;
     float m = 1.0;
-    float v_x0 = -cos(theta);
-    float v_y0 = 3.0 * sin(theta);
+    float v_x0 = -cos(pc.theta);
+    float v_y0 = sin(pc.theta);
     float r_x = float(brush_pos.x - x) / s;
     float r_y = float(brush_pos.y - y) / s;
 
@@ -139,21 +138,25 @@ void main() {
 
             imageStore(img, location, vec4(u_new, v_new, potential, old_v));
         } else if (pc.brush_layer == 3 && r < brush_radius) {
-            potential = max(potential, brush_value * exp(- pow(r, 2) / brush_radius));
+            potential = max(potential, brush_value * exp(-pow(r, 2) / brush_radius));
             imageStore(img, location, vec4(u, v, potential, old_v));
         }
     }
 
     switch (pc.stage) {
-        case 0: {
+        case 0:
+        {
             float dv_dt = dv_dt(location);
             float new_v = v + dv_dt * dt;
             imageStore(img, location, vec4(U(location), new_v, potential, v));
-        } break;
-        case 1: {
+        }
+        break;
+        case 1:
+        {
             float du_dt = du_dt(location);
             float new_u = u + du_dt * dt;
             imageStore(img, location, vec4(new_u, V(location), potential, old_v));
-        } break;
+        }
+        break;
     }
 }

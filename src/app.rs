@@ -1,12 +1,14 @@
-use vulkano::memory::allocator::*;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, allocator::*};
+use vulkano::command_buffer::{
+    AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, allocator::*,
+};
 use vulkano::descriptor_set::allocator::*;
+use vulkano::memory::allocator::*;
 use vulkano::sync::{self, GpuFuture};
 
 use winit::application::ApplicationHandler;
-use winit::event::{MouseButton, WindowEvent};
+use winit::event::{MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::*;
-use winit::event_loop::{EventLoop, ActiveEventLoop};
 
 use vulkano_util::{
     context::{VulkanoConfig, VulkanoContext},
@@ -33,9 +35,17 @@ impl VulkanManager {
         let context = VulkanoContext::new(VulkanoConfig::default());
         let windows = VulkanoWindows::default();
 
-        let memory_allocator         = Arc::new(StandardMemoryAllocator::new_default(context.device().clone()));
-        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(context.device().clone(), StandardDescriptorSetAllocatorCreateInfo::default())); 
-        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(context.device().clone(), StandardCommandBufferAllocatorCreateInfo::default())); 
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(
+            context.device().clone(),
+        ));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            context.device().clone(),
+            StandardDescriptorSetAllocatorCreateInfo::default(),
+        ));
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+            context.device().clone(),
+            StandardCommandBufferAllocatorCreateInfo::default(),
+        ));
 
         VulkanManager {
             context,
@@ -43,19 +53,25 @@ impl VulkanManager {
 
             memory_allocator,
             descriptor_set_allocator,
-            command_buffer_allocator 
+            command_buffer_allocator,
         }
     }
 
-    pub fn get_compute_cmdbuffer_builder(&self) -> AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
+    pub fn get_compute_cmdbuffer_builder(
+        &self,
+    ) -> AutoCommandBufferBuilder<PrimaryAutoCommandBuffer> {
         AutoCommandBufferBuilder::primary(
             self.command_buffer_allocator.clone(),
-            self.context.compute_queue().queue_family_index(), 
-            CommandBufferUsage::OneTimeSubmit
-        ).unwrap()
+            self.context.compute_queue().queue_family_index(),
+            CommandBufferUsage::OneTimeSubmit,
+        )
+        .unwrap()
     }
 
-    pub fn execute_compute_cmdbuffer_from_builder(&self, builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) {
+    pub fn execute_compute_cmdbuffer_from_builder(
+        &self,
+        builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+    ) {
         let command_buffer = builder.build().unwrap();
 
         let future = sync::now(self.context.device().clone())
@@ -77,17 +93,29 @@ pub struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.mgr.windows.create_window(event_loop, &self.mgr.context, &WindowDescriptor {
-            title: String::from("Quantum Echoes"),
-            ..Default::default()
-        }, |_| {});
+        self.mgr.windows.create_window(
+            event_loop,
+            &self.mgr.context,
+            &WindowDescriptor {
+                title: String::from("Quantum Echoes"),
+                ..Default::default()
+            },
+            |_| {},
+        );
 
         self.simulator = Some(Simulator::new(&self.mgr));
         self.ui_state = Some(UIState::new(&event_loop, &mut self.mgr));
-        self.renderer = Some(QuadRenderer::new(&self.mgr, self.simulator.as_ref().unwrap(), self.ui_state.as_ref().unwrap()));
+        self.renderer = Some(QuadRenderer::new(
+            &self.mgr,
+            self.simulator.as_ref().unwrap(),
+            self.ui_state.as_ref().unwrap(),
+        ));
 
-        self.simulator.as_ref().unwrap().compute(&self.mgr, self.ui_state.as_ref().unwrap());
-    } 
+        self.simulator
+            .as_ref()
+            .unwrap()
+            .compute(&self.mgr, self.ui_state.as_ref().unwrap());
+    }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         let ui_state = self.ui_state.as_mut().unwrap();
@@ -101,22 +129,44 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
-            },
+            }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 quad_renderer.window_resized = true;
-                simulator.resize(&self.mgr, (window.inner_size().width - ui_state.gui_width as u32) as u32 / resolution, window.inner_size().height as u32 / resolution);
-            },
-            WindowEvent::MouseInput { device_id: _, state, button } => {
+                simulator.resize(
+                    &self.mgr,
+                    (window.inner_size().width - ui_state.gui_width as u32) as u32 / resolution,
+                    window.inner_size().height as u32 / resolution,
+                );
+            }
+            WindowEvent::MouseInput {
+                device_id: _,
+                state,
+                button,
+            } => {
                 if state.is_pressed() && button == MouseButton::Left {
                     ui_state.brush_enabled = 1;
                 } else if !state.is_pressed() && button == MouseButton::Left {
                     ui_state.brush_enabled = 0;
                 }
+            }
+            WindowEvent::MouseWheel {
+                device_id: _,
+                delta,
+                phase: _,
+            } => match delta {
+                MouseScrollDelta::LineDelta(_, y) => {
+                    ui_state.theta += 0.25 * y as f32;
+                }
+                _ => {}
             },
-            WindowEvent::CursorMoved { device_id: _, position } => {
-                ui_state.brush_x = ((position.x - ui_state.gui_width as f64) / resolution as f64) as i32;
+            WindowEvent::CursorMoved {
+                device_id: _,
+                position,
+            } => {
+                ui_state.brush_x =
+                    ((position.x - ui_state.gui_width as f64) / resolution as f64) as i32;
                 ui_state.brush_y = (position.y / resolution as f64) as i32;
-            },
+            }
             WindowEvent::RedrawRequested => {
                 ui_state.setup_gui(&self.mgr, quad_renderer, simulator);
 
@@ -128,7 +178,12 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        self.mgr.windows.get_primary_window().as_mut().unwrap().request_redraw();
+        self.mgr
+            .windows
+            .get_primary_window()
+            .as_mut()
+            .unwrap()
+            .request_redraw();
     }
 }
 

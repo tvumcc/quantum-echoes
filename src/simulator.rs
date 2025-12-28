@@ -1,13 +1,15 @@
 use vulkano::command_buffer::ClearColorImageInfo;
 use vulkano::descriptor_set::{DescriptorSet, WriteDescriptorSet};
+use vulkano::format::*;
 use vulkano::image::sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo};
 use vulkano::image::view::ImageView;
 use vulkano::image::*;
 use vulkano::memory::allocator::*;
-use vulkano::format::*;
 use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
-use vulkano::pipeline::{ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::{
+    ComputePipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
+};
 
 use std::sync::Arc;
 
@@ -22,7 +24,7 @@ pub struct Simulator {
     pipeline: Arc<ComputePipeline>,
 
     pub width: u32,
-    pub height: u32
+    pub height: u32,
 }
 
 impl Simulator {
@@ -31,20 +33,25 @@ impl Simulator {
         let height = 1;
 
         let pipeline = {
-            let cs = cs::load(mgr.context.device().clone()).unwrap().entry_point("main").unwrap();
+            let cs = cs::load(mgr.context.device().clone())
+                .unwrap()
+                .entry_point("main")
+                .unwrap();
             let stage = PipelineShaderStageCreateInfo::new(cs);
             let layout = PipelineLayout::new(
                 mgr.context.device().clone(),
                 PipelineDescriptorSetLayoutCreateInfo::from_stages([&stage])
                     .into_pipeline_layout_create_info(mgr.context.device().clone())
                     .unwrap(),
-            ).unwrap();
+            )
+            .unwrap();
 
             ComputePipeline::new(
                 mgr.context.device().clone(),
                 None,
-                ComputePipelineCreateInfo::stage_layout(stage, layout)
-            ).unwrap()
+                ComputePipelineCreateInfo::stage_layout(stage, layout),
+            )
+            .unwrap()
         };
 
         let grid_u = Self::get_grid_image(mgr, width, height);
@@ -56,8 +63,9 @@ impl Simulator {
                 min_filter: sampler::Filter::Linear,
                 address_mode: [SamplerAddressMode::ClampToEdge; 3],
                 ..Default::default()
-            }
-        ).unwrap();
+            },
+        )
+        .unwrap();
 
         Simulator {
             grid_u,
@@ -117,13 +125,14 @@ impl Simulator {
             [WriteDescriptorSet::image_view(0, self.grid_view.clone())], // 0 is the binding
             [],
         )
-        .unwrap(); 
+        .unwrap();
 
         let mut stage0_builder = mgr.get_compute_cmdbuffer_builder();
         let mut stage1_builder = mgr.get_compute_cmdbuffer_builder();
 
         let mut push_constants = cs::PushConstantData {
             time_step: ui_state.time_step,
+            theta: ui_state.theta,
             brush_x: ui_state.brush_x,
             brush_y: ui_state.brush_y,
             brush_enabled: ui_state.brush_enabled,

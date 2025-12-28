@@ -1,6 +1,6 @@
-use egui_winit_vulkano::egui;
 use egui_winit_vulkano::Gui;
 use egui_winit_vulkano::GuiConfig;
+use egui_winit_vulkano::egui;
 
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -22,6 +22,7 @@ pub struct UIState {
     pub gui_width: f32,
 
     pub time_step: f32,
+    pub theta: f32,
 
     pub brush_x: i32,
     pub brush_y: i32,
@@ -52,12 +53,12 @@ impl UIState {
             )
         };
 
-
         UIState {
             gui,
             gui_width: 300f32,
 
             time_step: 0.01,
+            theta: 0.0,
 
             brush_x: 0,
             brush_y: 0,
@@ -74,24 +75,39 @@ impl UIState {
         self.gui.update(&event);
     }
 
-    pub fn setup_gui(&mut self, mgr: &VulkanManager, renderer: &mut QuadRenderer, simulator: &Simulator) {
+    pub fn setup_gui(
+        &mut self,
+        mgr: &VulkanManager,
+        renderer: &mut QuadRenderer,
+        simulator: &Simulator,
+    ) {
         let side_panel = egui::SidePanel::new(egui::panel::Side::Left, "side-panel");
         let prev_visible_layer = self.visible_layer;
 
         self.gui.immediate_ui(|gui| {
             let ctx = gui.context();
             ctx.set_pixels_per_point(1.0);
-            side_panel.show_separator_line(true).exact_width(self.gui_width).resizable(false).show(&ctx, |ui| {
-                ui.vertical_centered(|ui|{
-                    ui.heading("Quantum Echoes")
-                });
-                ui.separator();
+            side_panel
+                .show_separator_line(true)
+                .exact_width(self.gui_width)
+                .resizable(false)
+                .show(&ctx, |ui| {
+                    ui.vertical_centered(|ui| ui.heading("Quantum Echoes"));
+                    ui.separator();
 
-                egui::ScrollArea::horizontal()
-                    .show(ui, |ui|{
-                        ui.add(egui::widgets::Slider::new(&mut self.time_step, 0.0..=0.5).text("Time Step"));
-                        ui.add(egui::widgets::Slider::new(&mut self.brush_radius, 1..=16).text("Brush Radius"));
-                        ui.add(egui::widgets::Slider::new(&mut self.brush_value, 1..=10).text("Brush Value"));
+                    egui::ScrollArea::horizontal().show(ui, |ui| {
+                        ui.add(
+                            egui::widgets::Slider::new(&mut self.time_step, 0.0..=0.5)
+                                .text("Time Step"),
+                        );
+                        ui.add(
+                            egui::widgets::Slider::new(&mut self.brush_radius, 1..=16)
+                                .text("Brush Radius"),
+                        );
+                        ui.add(
+                            egui::widgets::Slider::new(&mut self.brush_value, 1..=10)
+                                .text("Brush Value"),
+                        );
                         ui.spacing();
                         ui.separator();
                         if ui.button("Reset Grid").clicked() {
@@ -101,23 +117,64 @@ impl UIState {
                         egui::ComboBox::from_label("Visible Layer")
                             .selected_text(format!("{:?}", self.visible_layer))
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.visible_layer, SimulationLayer::Real, "Real");
-                                ui.selectable_value(&mut self.visible_layer, SimulationLayer::Imaginary, "Imaginary");
-                                ui.selectable_value(&mut self.visible_layer, SimulationLayer::Probability, "Probability");
-                            }
-                        );
+                                ui.selectable_value(
+                                    &mut self.visible_layer,
+                                    SimulationLayer::Real,
+                                    "Real",
+                                );
+                                ui.selectable_value(
+                                    &mut self.visible_layer,
+                                    SimulationLayer::Imaginary,
+                                    "Imaginary",
+                                );
+                                ui.selectable_value(
+                                    &mut self.visible_layer,
+                                    SimulationLayer::Probability,
+                                    "Probability",
+                                );
+                            });
 
                         egui::ComboBox::from_label("Brush Layer")
                             .selected_text(format!("{:?}", self.brush_layer))
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.brush_layer, SimulationLayer::Real, "Real");
-                                ui.selectable_value(&mut self.brush_layer, SimulationLayer::Imaginary, "Imaginary");
-                                ui.selectable_value(&mut self.brush_layer, SimulationLayer::Potential, "Potential");
-                            }
-                        );
+                                ui.selectable_value(
+                                    &mut self.brush_layer,
+                                    SimulationLayer::Real,
+                                    "Real",
+                                );
+                                ui.selectable_value(
+                                    &mut self.brush_layer,
+                                    SimulationLayer::Imaginary,
+                                    "Imaginary",
+                                );
+                                ui.selectable_value(
+                                    &mut self.brush_layer,
+                                    SimulationLayer::Potential,
+                                    "Potential",
+                                );
+                            });
 
+                        let radius = self.gui_width / 3.0;
+                        let (response, state) = ui.allocate_space(egui::vec2(
+                            2.0 * self.gui_width / 3.0,
+                            2.0 * self.gui_width / 3.0,
+                        ));
+                        let painter = ui.painter();
+
+                        painter.circle_filled(state.center(), radius, egui::Color32::DARK_GRAY);
+                        painter.line_segment(
+                            [
+                                state.center(),
+                                state.center()
+                                    + egui::vec2(
+                                        radius * f32::cos(self.theta),
+                                        radius * -f32::sin(self.theta),
+                                    ),
+                            ],
+                            egui::Stroke::new(1.0, egui::Color32::WHITE),
+                        );
                     });
-            });
+                });
         });
 
         if prev_visible_layer != self.visible_layer {

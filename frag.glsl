@@ -1,12 +1,12 @@
 #version 460
 
-layout (location = 0) out vec4 f_color;
-layout (location = 0) in vec2 out_uv;
+layout(location = 0) out vec4 f_color;
+layout(location = 0) in vec2 out_uv;
 
-layout (set = 0, binding = 0) uniform sampler s;
-layout (set = 0, binding = 1) uniform texture2D tex;
+layout(set = 0, binding = 0) uniform sampler s;
+layout(set = 0, binding = 1) uniform texture2D tex;
 
-layout (push_constant) uniform PushConstantData {
+layout(push_constant) uniform PushConstantData {
     int visible_layer;
 } pc;
 
@@ -20,15 +20,15 @@ vec3 plasma(float t) {
     const vec3 c5 = vec3(10.02306557647065, 71.41361770095349, -54.07218655560067);
     const vec3 c6 = vec3(-3.658713842777788, -22.93153465461149, 18.19190778539828);
 
-    return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6)))));
+    return c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6)))));
 }
 
 // taken from https://www.shadertoy.com/view/Nd3fR2
 vec3 turbo(float t) {
     t = clamp(t, 0.0, 1.0);
-    return clamp(vec3((0.192919+t*(1.618437+t*(-39.426098+t*(737.420549+t*(-6489.216487+t*(28921.755478+t*(-72384.553891+t*(107076.097978+t*(-93276.212113+t*(44337.286143+t*-8884.508085)))))))))),
-                      (0.101988+t*(1.859131+t*(7.108520+t*(-20.179546+t*11.147684)))),
-                      (0.253316+t*(4.858570+t*(55.191710+t*(-803.379980+t*(4477.461997+t*(-14496.039745+t*(28438.311669+t*(-32796.884355+t*(20328.068712+t*-5210.826342)))))))))), 0.0, 1.0);
+    return clamp(vec3((0.192919 + t * (1.618437 + t * (-39.426098 + t * (737.420549 + t * (-6489.216487 + t * (28921.755478 + t * (-72384.553891 + t * (107076.097978 + t * (-93276.212113 + t * (44337.286143 + t * -8884.508085)))))))))),
+            (0.101988 + t * (1.859131 + t * (7.108520 + t * (-20.179546 + t * 11.147684)))),
+            (0.253316 + t * (4.858570 + t * (55.191710 + t * (-803.379980 + t * (4477.461997 + t * (-14496.039745 + t * (28438.311669 + t * (-32796.884355 + t * (20328.068712 + t * -5210.826342)))))))))), 0.0, 1.0);
 }
 
 void main() {
@@ -36,12 +36,12 @@ void main() {
     int layer = pc.visible_layer;
 
     float layers[5] = {
-        color.r, // Real
-        color.g, // Imaginary
-        (color.r * color.r + color.g * color.g), // Probability
-        color.b, // Potential
-        color.a  // Boundary
-    };
+            color.r, // Real
+            color.g, // Imaginary
+            (color.r * color.r + color.g * color.g), // Probability
+            color.b, // Potential
+            color.a // Boundary
+        };
 
     float prob = color.r * color.r + color.g * color.a;
 
