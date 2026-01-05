@@ -155,7 +155,7 @@ impl UIState {
                             });
 
                         let radius = self.gui_width / 3.0;
-                        let (response, state) = ui.allocate_space(egui::vec2(
+                        let (_response, state) = ui.allocate_space(egui::vec2(
                             2.0 * self.gui_width / 3.0,
                             2.0 * self.gui_width / 3.0,
                         ));

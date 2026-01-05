@@ -171,7 +171,7 @@ impl ApplicationHandler for App {
                 ui_state.setup_gui(&self.mgr, quad_renderer, simulator);
 
                 simulator.compute(&self.mgr, ui_state);
-                quad_renderer.draw(&self.mgr, simulator, ui_state);
+                quad_renderer.draw(&mut self.mgr, simulator, ui_state);
             }
             _ => (),
         }
