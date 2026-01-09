@@ -16,6 +16,7 @@ use vulkano_util::{
 };
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::quad_renderer::QuadRenderer;
 use crate::simulator::Simulator;
@@ -122,7 +123,6 @@ impl ApplicationHandler for App {
         let simulator = self.simulator.as_mut().unwrap();
         ui_state.handle_event(&event);
         let quad_renderer = self.renderer.as_mut().unwrap();
-        let window = self.mgr.windows.get_primary_window().unwrap();
 
         let resolution = 5;
 
@@ -132,9 +132,12 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 quad_renderer.window_resized = true;
+                quad_renderer.last_resize_event = Instant::now();
+                let window = self.mgr.windows.get_primary_window().unwrap();
+                let gui_width = ui_state.gui_width;
                 simulator.resize(
                     &self.mgr,
-                    (window.inner_size().width - ui_state.gui_width as u32) as u32 / resolution,
+                    (window.inner_size().width as f32 - gui_width).max(gui_width) as u32 / resolution,
                     window.inner_size().height as u32 / resolution,
                 );
             }
@@ -157,6 +160,9 @@ impl ApplicationHandler for App {
                 MouseScrollDelta::LineDelta(_, y) => {
                     ui_state.theta += 0.25 * y as f32;
                 }
+                MouseScrollDelta::PixelDelta(u) => {
+                    ui_state.theta += 0.1 * u.y as f32;
+                }
                 _ => {}
             },
             WindowEvent::CursorMoved {
@@ -168,7 +174,7 @@ impl ApplicationHandler for App {
                 ui_state.brush_y = (position.y / resolution as f64) as i32;
             }
             WindowEvent::RedrawRequested => {
-                ui_state.setup_gui(&self.mgr, quad_renderer, simulator);
+                ui_state.setup_gui(&self.mgr, simulator);
 
                 simulator.compute(&self.mgr, ui_state);
                 quad_renderer.draw(&mut self.mgr, simulator, ui_state);

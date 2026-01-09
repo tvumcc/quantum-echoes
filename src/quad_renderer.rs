@@ -13,7 +13,7 @@ use vulkano::shader::*;
 use vulkano::sync::GpuFuture;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::app::VulkanManager;
 use crate::simulator::Simulator;
@@ -36,18 +36,19 @@ pub struct QuadRenderer {
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
     pipeline: Arc<GraphicsPipeline>,
-    command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
 
     descriptor_set: Arc<DescriptorSet>,
 
     vertex_buffer: Subbuffer<[VertexContainer]>,
 
     pub window_resized: bool,
+    pub last_resize_event: Instant,
 }
 
 impl QuadRenderer {
     pub fn new(mgr: &VulkanManager, simulator: &Simulator, ui_state: &UIState) -> Self {
         let window_renderer = mgr.windows.get_primary_renderer().unwrap();
+        let window_size = window_renderer.window().inner_size();
         
         let vertex_buffer = Buffer::from_iter(
             mgr.memory_allocator.clone(),
@@ -71,26 +72,15 @@ impl QuadRenderer {
         )
         .unwrap();
 
-        let vs =
-            vs::load(mgr.context.device().clone()).expect("failed to create vertex shader module");
-        let fs = fs::load(mgr.context.device().clone())
-            .expect("failed to create fragment shader module");
+        let vs = vs::load(mgr.context.device().clone()).expect("failed to create vertex shader module");
+        let fs = fs::load(mgr.context.device().clone()).expect("failed to create fragment shader module");
 
-        let viewport = Self::get_viewport(mgr, 0.0);
+        let viewport = Self::get_viewport(window_size.width as f32, window_size.height as f32, ui_state.gui_width);
         let render_pass = Self::get_render_pass(mgr);
         let framebuffers = Self::get_framebuffers(window_renderer.swapchain_image_views(), &render_pass);
         let pipeline = Self::get_pipeline(mgr, &vs, &fs, &render_pass, viewport.clone());
 
         let descriptor_set = Self::get_descriptor_set(mgr, simulator, &pipeline);
-
-        let command_buffers = Self::get_command_buffers(
-            mgr,
-            ui_state,
-            &pipeline,
-            &framebuffers,
-            &vertex_buffer,
-            &descriptor_set,
-        );
 
         QuadRenderer {
             vertex_shader: vs,
@@ -100,35 +90,40 @@ impl QuadRenderer {
             render_pass,
             framebuffers,
             pipeline,
-            command_buffers,
             descriptor_set,
 
             vertex_buffer,
             window_resized: false,
+            last_resize_event: Instant::now(),
         }
     }
 
     pub fn draw(&mut self, mgr: &mut VulkanManager, simulator: &Simulator, ui_state: &mut UIState) {
-        if self.window_resized {
-            self.window_resized = false;
-            self.update(mgr, simulator, &ui_state);
-        }
-        
-        let window_renderer = mgr.windows.get_primary_renderer_mut().unwrap();
-        let window_size = window_renderer.window().inner_size();
-        
-        let previous_frame_end = window_renderer
-            .acquire(Some(Duration::from_millis(1000)), |swapchain_images| {
-                self.framebuffers = QuadRenderer::get_framebuffers(swapchain_images, &self.render_pass);
-                self.viewport.extent = window_size.into();
+        let mut recreate_swapchain = false;
+        let previous_frame_end = mgr.windows.get_primary_renderer_mut().unwrap()
+            .acquire(Some(Duration::from_millis(1000)), |_| {
+                recreate_swapchain = true;
             })
             .unwrap();
-
+        
+        if recreate_swapchain || self.window_resized {
+            if self.window_resized {
+                if self.last_resize_event.elapsed().as_millis() > 30 {
+                    mgr.windows.get_primary_renderer_mut().unwrap().resize();
+                    self.window_resized = false;
+                }
+            }
+            self.update(mgr, simulator, ui_state);
+        }
+        
+        let command_buffer = self.command_buffer(&mgr, ui_state);
+        
         let mut future = previous_frame_end
-            .then_execute(mgr.context.graphics_queue().clone(), self.command_buffers[window_renderer.image_index() as usize].clone())
+            .then_execute(mgr.context.graphics_queue().clone(), command_buffer.clone())
             .unwrap()
             .boxed();
         
+        let window_renderer = mgr.windows.get_primary_renderer_mut().unwrap();
         future = ui_state.gui
             .draw_on_image(future, window_renderer.swapchain_image_view());
         
@@ -136,7 +131,10 @@ impl QuadRenderer {
     }
 
     pub fn update(&mut self, mgr: &VulkanManager, simulator: &Simulator, ui_state: &UIState) {
-        self.viewport = Self::get_viewport(mgr, ui_state.gui_width);
+        let window_renderer = mgr.windows.get_primary_renderer().unwrap();
+        let window_size = window_renderer.window().inner_size();
+        
+        self.viewport = Self::get_viewport(window_size.width as f32, window_size.height as f32, ui_state.gui_width);
         self.pipeline = Self::get_pipeline(
             mgr,
             &self.vertex_shader,
@@ -145,38 +143,62 @@ impl QuadRenderer {
             self.viewport.clone(),
         );
         self.descriptor_set = Self::get_descriptor_set(mgr, simulator, &self.pipeline);
-        self.update_command_buffers(mgr, ui_state);
+        self.framebuffers = Self::get_framebuffers(window_renderer.swapchain_image_views(), &self.render_pass);
     }
 
-    pub fn update_command_buffers(&mut self, mgr: &VulkanManager, ui_state: &UIState) {
-        self.command_buffers = Self::get_command_buffers(
-            mgr,
-            ui_state,
-            &self.pipeline,
-            &self.framebuffers,
-            &self.vertex_buffer,
-            &self.descriptor_set,
+    pub fn command_buffer(&self, mgr: &VulkanManager, ui_state: &UIState) -> Arc<PrimaryAutoCommandBuffer> {
+        let mut builder = AutoCommandBufferBuilder::primary(
+            mgr.command_buffer_allocator.clone(),
+            mgr.context.graphics_queue().queue_family_index(),
+            CommandBufferUsage::MultipleSubmit,
         )
+        .unwrap();
+
+        let push_constants = fs::PushConstantData {
+            visible_layer: ui_state.visible_layer as i32,
+        };
+        
+        let window_renderer = mgr.windows.get_primary_renderer().unwrap();
+        
+        unsafe {
+            builder
+                .begin_render_pass(
+                    RenderPassBeginInfo {
+                        clear_values: vec![Some([0.1, 0.1, 0.1, 1.0].into())],
+                        ..RenderPassBeginInfo::framebuffer(self.framebuffers[window_renderer.image_index() as usize].clone())
+                    },
+                    SubpassBeginInfo {
+                        contents: SubpassContents::Inline,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+                .bind_pipeline_graphics(self.pipeline.clone())
+                .unwrap()
+                .push_constants(self.pipeline.layout().clone(), 0, push_constants)
+                .unwrap()
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Graphics,
+                    self.pipeline.layout().clone(),
+                    0,
+                    self.descriptor_set.clone(),
+                )
+                .unwrap()
+                .bind_vertex_buffers(0, self.vertex_buffer.clone())
+                .unwrap()
+                .draw(self.vertex_buffer.len() as u32, 1, 0, 0)
+                .unwrap()
+                .end_render_pass(SubpassEndInfo::default())
+                .unwrap();
+        }
+
+        builder.build().unwrap()
     }
 
-    fn get_viewport(mgr: &VulkanManager, gui_width: f32) -> viewport::Viewport {
+    fn get_viewport(window_width: f32, window_height: f32, gui_width: f32) -> viewport::Viewport {
         viewport::Viewport {
             offset: [gui_width, 0.0],
-            extent: [
-                ((mgr
-                    .windows
-                    .get_primary_window()
-                    .expect("HEY")
-                    .inner_size()
-                    .width) as f32
-                    - gui_width)
-                    .max(gui_width),
-                mgr.windows
-                    .get_primary_window()
-                    .expect("HEY")
-                    .inner_size()
-                    .height as f32,
-            ],
+            extent: [(window_width - gui_width).max(gui_width), window_height],
             depth_range: 0.0..=1.0,
         }
     }
@@ -218,13 +240,7 @@ impl QuadRenderer {
             .collect::<Vec<_>>()
     }
 
-    fn get_pipeline(
-        mgr: &VulkanManager,
-        vs: &Arc<ShaderModule>,
-        fs: &Arc<ShaderModule>,
-        render_pass: &Arc<RenderPass>,
-        viewport: viewport::Viewport,
-    ) -> Arc<GraphicsPipeline> {
+    fn get_pipeline(mgr: &VulkanManager, vs: &Arc<ShaderModule>, fs: &Arc<ShaderModule>, render_pass: &Arc<RenderPass>, viewport: viewport::Viewport) -> Arc<GraphicsPipeline> {
         let vs = vs.entry_point("main").unwrap();
         let fs = fs.entry_point("main").unwrap();
 
@@ -267,65 +283,6 @@ impl QuadRenderer {
             },
         )
         .unwrap()
-    }
-
-    fn get_command_buffers(
-        mgr: &VulkanManager,
-        ui_state: &UIState,
-        pipeline: &Arc<GraphicsPipeline>,
-        framebuffers: &Vec<Arc<Framebuffer>>,
-        vertex_buffer: &Subbuffer<[VertexContainer]>,
-        descriptor_set: &Arc<DescriptorSet>,
-    ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
-        let push_constants = fs::PushConstantData {
-            visible_layer: ui_state.visible_layer as i32,
-        };
-
-        framebuffers
-            .iter()
-            .map(|framebuffer| {
-                let mut builder = AutoCommandBufferBuilder::primary(
-                    mgr.command_buffer_allocator.clone(),
-                    mgr.context.graphics_queue().queue_family_index(),
-                    CommandBufferUsage::MultipleSubmit,
-                )
-                .unwrap();
-
-                unsafe {
-                    builder
-                        .begin_render_pass(
-                            RenderPassBeginInfo {
-                                clear_values: vec![Some([0.1, 0.1, 0.1, 1.0].into())],
-                                ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
-                            },
-                            SubpassBeginInfo {
-                                contents: SubpassContents::Inline,
-                                ..Default::default()
-                            },
-                        )
-                        .unwrap()
-                        .bind_pipeline_graphics(pipeline.clone())
-                        .unwrap()
-                        .push_constants(pipeline.layout().clone(), 0, push_constants)
-                        .unwrap()
-                        .bind_descriptor_sets(
-                            PipelineBindPoint::Graphics,
-                            pipeline.layout().clone(),
-                            0,
-                            descriptor_set.clone(),
-                        )
-                        .unwrap()
-                        .bind_vertex_buffers(0, vertex_buffer.clone())
-                        .unwrap()
-                        .draw(vertex_buffer.len() as u32, 1, 0, 0)
-                        .unwrap()
-                        .end_render_pass(SubpassEndInfo::default())
-                        .unwrap();
-                }
-
-                builder.build().unwrap()
-            })
-            .collect()
     }
 
     fn get_descriptor_set(

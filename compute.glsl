@@ -4,6 +4,7 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(push_constant) uniform PushConstantData {
     float time_step;
+    float speed;
     float theta;
     int brush_x;
     int brush_y;
@@ -117,14 +118,14 @@ void main() {
     vec4 grid_cell = imageLoad(img, location);
     float u = grid_cell.r;
     float v = grid_cell.g;
-    float potential = grid_cell.b;
+    float potential = potential(location);
     float old_v = grid_cell.a;
 
     float pi = 3.14159265;
     float s = 2.5;
     float m = 1.0;
-    float v_x0 = -cos(pc.theta);
-    float v_y0 = sin(pc.theta);
+    float v_x0 = pc.speed * -cos(pc.theta);
+    float v_y0 = pc.speed * sin(pc.theta);
     float r_x = float(brush_pos.x - x) / s;
     float r_y = float(brush_pos.y - y) / s;
 

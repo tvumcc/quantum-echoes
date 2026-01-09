@@ -132,6 +132,7 @@ impl Simulator {
 
         let mut push_constants = cs::PushConstantData {
             time_step: ui_state.time_step,
+            speed: ui_state.speed,
             theta: ui_state.theta,
             brush_x: ui_state.brush_x,
             brush_y: ui_state.brush_y,
