@@ -12,22 +12,42 @@ layout(push_constant) uniform PushConstantData {
     int brush_radius;
     int brush_value;
     int brush_layer;
+    int boundary_condition;
+    float boundary_condition_value;
     int stage;
 } pc;
 
 layout(set = 0, binding = 0, rgba32f) uniform image2D img;
 
 float U(int x, int y) {
-    if (x < 0)
-        x = imageSize(img).x - 1;
-    if (x >= imageSize(img).x)
-        x = 0;
-    if (y < 0)
-        y = imageSize(img).y - 1;
-    if (y >= imageSize(img).y)
-        y = 0;
-    // if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
-    //     return 0.0;
+    switch (pc.boundary_condition) {
+        case 0: // Dirichlet
+        {
+            if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
+                return pc.boundary_condition_value;
+        }
+        break;
+        
+        case 1: // Neumann
+        {
+        
+        }
+        break;
+        
+        case 2: // Periodic
+        {
+            if (x < 0)
+                x = imageSize(img).x - 1;
+            if (x >= imageSize(img).x)
+                x = 0;
+            if (y < 0)
+                y = imageSize(img).y - 1;
+            if (y >= imageSize(img).y)
+                y = 0;
+        }
+        break;
+    }
+    
     return imageLoad(img, ivec2(x, y)).r;
 }
 
@@ -36,16 +56,34 @@ float U(ivec2 location) {
 }
 
 float V(int x, int y) {
-    if (x < 0)
-        x = imageSize(img).x - 1;
-    if (x >= imageSize(img).x)
-        x = 0;
-    if (y < 0)
-        y = imageSize(img).y - 1;
-    if (y >= imageSize(img).y)
-        y = 0;
-    // if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
-    //     return 0.0;
+    switch (pc.boundary_condition) {
+        case 0: // Dirichlet
+        {
+            if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
+                return pc.boundary_condition_value;
+        }
+        break;
+        
+        case 1: // Neumann
+        {
+        
+        }
+        break;
+        
+        case 2: // Periodic
+        {
+            if (x < 0)
+                x = imageSize(img).x - 1;
+            if (x >= imageSize(img).x)
+                x = 0;
+            if (y < 0)
+                y = imageSize(img).y - 1;
+            if (y >= imageSize(img).y)
+                y = 0;
+        }
+        break;
+    }
+    
     return imageLoad(img, ivec2(x, y)).g;
 }
 

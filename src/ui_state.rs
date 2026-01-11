@@ -16,6 +16,13 @@ pub enum SimulationLayer {
     Potential,
 }
 
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum BoundaryCondition {
+    Dirichlet = 0,
+    Neumann,
+    Periodic,
+}
+
 pub struct UIState {
     pub gui: Gui,
     pub gui_width: f32,
@@ -32,6 +39,9 @@ pub struct UIState {
 
     pub visible_layer: SimulationLayer,
     pub brush_layer: SimulationLayer,
+    
+    pub boundary_condition: BoundaryCondition,
+    pub boundary_condition_value: f32,
 }
 
 impl UIState {
@@ -69,6 +79,9 @@ impl UIState {
 
             brush_layer: SimulationLayer::Real,
             visible_layer: SimulationLayer::Probability,
+            
+            boundary_condition: BoundaryCondition::Periodic,
+            boundary_condition_value: 0.0,
         }
     }
 
@@ -177,6 +190,39 @@ impl UIState {
                                 egui::Stroke::new(1.0, egui::Color32::WHITE),
                             );
                         });
+                        
+                        ui.spacing();
+                        ui.separator();
+                        
+                        egui::ComboBox::from_label("Boundary Condition")
+                            .selected_text(format!("{:?}", self.boundary_condition))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.boundary_condition,
+                                    BoundaryCondition::Dirichlet,
+                                    "Dirichlet",
+                                );
+                                ui.selectable_value(
+                                    &mut self.boundary_condition,
+                                    BoundaryCondition::Neumann,
+                                    "Neumann",
+                                );
+                                ui.selectable_value(
+                                    &mut self.boundary_condition,
+                                    BoundaryCondition::Periodic,
+                                    "Periodic",
+                                );
+                            });
+                        
+                        match self.boundary_condition {
+                            BoundaryCondition::Dirichlet | BoundaryCondition::Neumann => {
+                                ui.add(
+                                    egui::widgets::Slider::new(&mut self.boundary_condition_value, -1.0..=1.0)
+                                        .text("Value"),
+                                );
+                            }
+                            BoundaryCondition::Periodic => {}
+                        }
                     });
                 });
         });
