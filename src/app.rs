@@ -163,7 +163,6 @@ impl ApplicationHandler for App {
                 MouseScrollDelta::PixelDelta(u) => {
                     ui_state.theta += 0.1 * u.y as f32;
                 }
-                _ => {}
             },
             WindowEvent::CursorMoved {
                 device_id: _,

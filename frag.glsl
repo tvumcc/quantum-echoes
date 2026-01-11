@@ -35,15 +35,12 @@ void main() {
     vec4 color = texture(sampler2D(tex, s), out_uv);
     int layer = pc.visible_layer;
 
-    float layers[5] = {
+    float layers[4] = {
             color.r, // Real
             color.g, // Imaginary
-            (color.r * color.r + color.g * color.g), // Probability
+            (color.r * color.r + color.g * color.a), // Probability
             color.b, // Potential
-            color.a // Boundary
         };
 
-    float prob = color.r * color.r + color.g * color.a;
-
-    f_color = vec4(turbo(prob) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
+    f_color = vec4(turbo(layers[layer]) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
 }

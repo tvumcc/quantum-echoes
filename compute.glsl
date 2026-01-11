@@ -13,7 +13,6 @@ layout(push_constant) uniform PushConstantData {
     int brush_value;
     int brush_layer;
     int boundary_condition;
-    float boundary_condition_value;
     int stage;
 } pc;
 
@@ -24,16 +23,9 @@ float U(int x, int y) {
         case 0: // Dirichlet
         {
             if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
-                return pc.boundary_condition_value;
+                return 0.0;
         }
         break;
-        
-        case 1: // Neumann
-        {
-        
-        }
-        break;
-        
         case 2: // Periodic
         {
             if (x < 0)
@@ -60,16 +52,9 @@ float V(int x, int y) {
         case 0: // Dirichlet
         {
             if (x < 0 || x >= imageSize(img).x || y < 0 || y >= imageSize(img).y)
-                return pc.boundary_condition_value;
+                return 0.0;
         }
         break;
-        
-        case 1: // Neumann
-        {
-        
-        }
-        break;
-        
         case 2: // Periodic
         {
             if (x < 0)
@@ -111,6 +96,13 @@ float du_dt(int x, int y) {
     float dv_dy_0 = (v - V(x, y - 1)) / dx;
     float dv_dy_1 = (V(x, y + 1) - v) / dx;
 
+    if (pc.boundary_condition == 1) { // Neumann
+        if (x == 0) dv_dx_0 = 0.0;
+        if (x == imageSize(img).x - 1) dv_dx_1 = 0.0;
+        if (y == 0) dv_dy_0 = 0.0;
+        if (y == imageSize(img).y - 1) dv_dy_1 = 0.0;
+    }
+    
     float d2v_dx2 = (dv_dx_1 - dv_dx_0) / dx;
     float d2v_dy2 = (dv_dy_1 - dv_dy_0) / dx;
 
@@ -130,6 +122,13 @@ float dv_dt(int x, int y) {
 
     float du_dy_0 = (u - U(x, y - 1)) / dx;
     float du_dy_1 = (U(x, y + 1) - u) / dx;
+    
+    if (pc.boundary_condition == 1) { // Neumann
+        if (x == 0) du_dx_0 = 0.0;
+        if (x == imageSize(img).x - 1) du_dx_1 = 0.0;
+        if (y == 0) du_dy_0 = 0.0;
+        if (y == imageSize(img).y - 1) du_dy_1 = 0.0;
+    }
 
     float d2u_dx2 = (du_dx_1 - du_dx_0) / dx;
     float d2u_dy2 = (du_dy_1 - du_dy_0) / dx;
@@ -180,8 +179,7 @@ void main() {
             potential = max(potential, brush_value * exp(-pow(r, 2) / brush_radius));
             imageStore(img, location, vec4(u, v, potential, old_v));
         }
-    }
-
+    } else {
     switch (pc.stage) {
         case 0:
         {
@@ -198,4 +196,6 @@ void main() {
         }
         break;
     }
+    }
+
 }

@@ -41,7 +41,6 @@ pub struct UIState {
     pub brush_layer: SimulationLayer,
     
     pub boundary_condition: BoundaryCondition,
-    pub boundary_condition_value: f32,
 }
 
 impl UIState {
@@ -81,7 +80,6 @@ impl UIState {
             visible_layer: SimulationLayer::Probability,
             
             boundary_condition: BoundaryCondition::Periodic,
-            boundary_condition_value: 0.0,
         }
     }
 
@@ -213,16 +211,6 @@ impl UIState {
                                     "Periodic",
                                 );
                             });
-                        
-                        match self.boundary_condition {
-                            BoundaryCondition::Dirichlet | BoundaryCondition::Neumann => {
-                                ui.add(
-                                    egui::widgets::Slider::new(&mut self.boundary_condition_value, -1.0..=1.0)
-                                        .text("Value"),
-                                );
-                            }
-                            BoundaryCondition::Periodic => {}
-                        }
                     });
                 });
         });

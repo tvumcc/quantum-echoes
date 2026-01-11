@@ -141,7 +141,6 @@ impl Simulator {
             brush_value: ui_state.brush_value,
             brush_layer: ui_state.brush_layer as i32,
             boundary_condition: ui_state.boundary_condition as i32,
-            boundary_condition_value: ui_state.boundary_condition_value,
             stage: 0,
         };
 
