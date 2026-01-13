@@ -9,7 +9,7 @@ layout(push_constant) uniform PushConstantData {
     int brush_x;
     int brush_y;
     int brush_enabled;
-    int brush_radius;
+    float brush_radius;
     int brush_value;
     int brush_layer;
     int boundary_condition;
@@ -148,7 +148,7 @@ void main() {
     float dt = pc.time_step;
 
     ivec2 brush_pos = ivec2(pc.brush_x, pc.brush_y);
-    float brush_radius = float(pc.brush_radius);
+    float brush_radius = pc.brush_radius;
     float brush_value = float(pc.brush_value);
     float r = distance(vec2(location), vec2(brush_pos));
 
@@ -159,7 +159,7 @@ void main() {
     float old_v = grid_cell.a;
 
     float pi = 3.14159265;
-    float s = 2.5;
+    float s = pc.brush_radius;
     float m = 1.0;
     float v_x0 = pc.speed * -cos(pc.theta);
     float v_y0 = pc.speed * sin(pc.theta);
@@ -167,7 +167,7 @@ void main() {
     float r_y = float(brush_pos.y - y) / s;
 
     if (pc.brush_enabled == 1) {
-        if ((pc.brush_layer == 0 || pc.brush_layer == 1)) {
+        if (pc.brush_layer == 4) {
             float u_new = brush_value * (exp(-1 / (4 * s * s) * (r_x * r_x + r_y * r_y))) / sqrt(2 * pi * s * s) * cos(m * (v_x0 * r_x + v_y0 * r_y));
             float v_new = brush_value * (exp(-1 / (4 * s * s) * (r_x * r_x + r_y * r_y))) / sqrt(2 * pi * s * s) * sin(m * (v_x0 * r_x + v_y0 * r_y));
 
@@ -180,22 +180,22 @@ void main() {
             imageStore(img, location, vec4(u, v, potential, old_v));
         }
     } else {
-    switch (pc.stage) {
-        case 0:
-        {
-            float dv_dt = dv_dt(location);
-            float new_v = v + dv_dt * dt;
-            imageStore(img, location, vec4(U(location), new_v, potential, v));
+        switch (pc.stage) {
+            case 0:
+            {
+                float dv_dt = dv_dt(location);
+                float new_v = v + dv_dt * dt;
+                imageStore(img, location, vec4(U(location), new_v, potential, v));
+            }
+            break;
+            case 1:
+            {
+                float du_dt = du_dt(location);
+                float new_u = u + du_dt * dt;
+                imageStore(img, location, vec4(new_u, V(location), potential, old_v));
+            }
+            break;
         }
-        break;
-        case 1:
-        {
-            float du_dt = du_dt(location);
-            float new_u = u + du_dt * dt;
-            imageStore(img, location, vec4(new_u, V(location), potential, old_v));
-        }
-        break;
-    }
     }
 
 }

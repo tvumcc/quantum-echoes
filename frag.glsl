@@ -31,6 +31,24 @@ vec3 turbo(float t) {
             (0.253316 + t * (4.858570 + t * (55.191710 + t * (-803.379980 + t * (4477.461997 + t * (-14496.039745 + t * (28438.311669 + t * (-32796.884355 + t * (20328.068712 + t * -5210.826342)))))))))), 0.0, 1.0);
 }
 
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 rgb2hsv(vec3 c)
+{
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
 void main() {
     vec4 color = texture(sampler2D(tex, s), out_uv);
     int layer = pc.visible_layer;
@@ -42,5 +60,12 @@ void main() {
             color.b, // Potential
         };
 
-    f_color = vec4(turbo(layers[layer]) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
+    switch (layer) {
+        case 4: {
+            f_color = vec4(hsv2rgb(vec3(atan(color.g, color.r), 1.0, layers[2])) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
+        } break;
+        default: {
+            f_color = vec4(turbo(layers[layer]) + min(1.0, layers[3]) * plasma(layers[3]), 1.0);
+        } break;
+    }
 }
