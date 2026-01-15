@@ -171,6 +171,8 @@ impl ApplicationHandler for App {
                 ui_state.brush_x =
                     ((position.x - ui_state.gui_width as f64) / resolution as f64) as i32;
                 ui_state.brush_y = (position.y / resolution as f64) as i32;
+                ui_state.mouse_x = position.x as f32;
+                ui_state.mouse_y = position.y as f32;
             }
             WindowEvent::RedrawRequested => {
                 ui_state.setup_gui(&self.mgr, simulator);
