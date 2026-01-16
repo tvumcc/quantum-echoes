@@ -307,13 +307,13 @@ impl QuadRenderer {
 mod vs {
     vulkano_shaders::shader! {
         ty: "vertex",
-        path: "vert.glsl"
+        path: "shaders/vert.glsl"
     }
 }
 
 mod fs {
     vulkano_shaders::shader! {
         ty: "fragment",
-        path: "frag.glsl"
+        path: "shaders/frag.glsl"
     }
 }

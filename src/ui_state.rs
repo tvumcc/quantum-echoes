@@ -98,9 +98,9 @@ impl UIState {
             brush_value: 8,
 
             brush_layer: SimulationLayer::WaveFunction,
-            visible_layer: SimulationLayer::Probability,
+            visible_layer: SimulationLayer::WaveFunction,
             
-            boundary_condition: BoundaryCondition::Periodic,
+            boundary_condition: BoundaryCondition::Neumann,
         }
     }
 
@@ -113,7 +113,6 @@ impl UIState {
         mgr: &VulkanManager,
         simulator: &Simulator,
     ) {
-        let width = mgr.windows.get_primary_window().as_ref().unwrap().inner_size().width as f32;
         let side_panel = egui::SidePanel::new(egui::panel::Side::Left, "side-panel");
 
         self.gui.immediate_ui(|gui| {

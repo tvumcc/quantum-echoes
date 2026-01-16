@@ -188,6 +188,6 @@ impl Simulator {
 mod cs {
     vulkano_shaders::shader! {
         ty: "compute",
-        path: "compute.glsl"
+        path: "shaders/compute.glsl"
     }
 }
